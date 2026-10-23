@@ -56,6 +56,7 @@ struct SpecialCache {
   bool drawn;
   char clock[6];
   char lastData[24];
+  char ip[16];
 };
 
 void specialInvalidate(SpecialCache& cache);

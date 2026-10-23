@@ -13,6 +13,10 @@ void usageApply(const UsagePacket& packet);
 // True once any valid packet has arrived since boot.
 bool usageHasPacket();
 
+// True once the design should own the screen: a packet has arrived, or
+// SYSOPTV_NO_PC_AFTER_MS have passed since boot without one.
+bool usageScreenActive();
+
 // Current time in UTC and offset to local time. Returns false if neither the
 // sender nor NTP has delivered a time yet.
 bool usageTime(int64_t& utc, int32_t& tz);

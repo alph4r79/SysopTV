@@ -43,8 +43,9 @@ void phosphorInvalidate() {
 
 static void drawFrame(bool showUsed) {
   viewTft().fillScreen(BACK);
+  // CLAUDE at x 8, mode word at x 68, clock right at 232, all in the VGA font.
   vgaText("CLAUDE", 8, 6, ALIGN_LEFT, 1, PHOSPHOR_MAIN, BACK);
-  vgaText(showUsed ? "VERBRAUCHT" : "FREI", 232, 6, ALIGN_RIGHT, 1, PHOSPHOR_DIM, BACK);
+  vgaText(showUsed ? "VERBRAUCHT" : "\xc3\x9c" "BRIG", 68, 6, ALIGN_LEFT, 1, PHOSPHOR_DIM, BACK);
   drawnClock[0] = '\0';
   cols[0].valid = false;
   cols[1].valid = false;
@@ -118,7 +119,7 @@ void phosphorShow(const UsageView& view) {
     specialInvalidate(special);
   }
   if (textChanged(drawnClock, sizeof(drawnClock), view.clock)) {
-    vgaText(view.clock, 120, 6, ALIGN_CENTER, 1, PHOSPHOR_DIM, BACK);
+    vgaText(view.clock, 232, 6, ALIGN_RIGHT, 1, PHOSPHOR_DIM, BACK, 40);
   }
   drawColumn(0, view.session, "SESSION");
   drawColumn(1, view.week, "WOCHE");

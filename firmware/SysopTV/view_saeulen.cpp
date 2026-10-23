@@ -3,7 +3,8 @@
 //
 // Design 1 "Saeulen": the first SysopTV screen. Green on black, two upright
 // tanks of 10 segments, empty segments only as outline. Big texts use the
-// built-in 6x8 GLCD font scaled up.
+// built-in 6x8 GLCD font scaled up, the header the VGA font, which has the
+// umlaut of the mode word.
 
 #include "views.h"
 #include "view_common.h"
@@ -13,13 +14,14 @@
 static const uint16_t BACK = SYSOPTV_BLACK;
 
 static const int COL_X[2] = {60, 180};
-static const int HEADER_Y = 12;
-static const int MODE_Y = 38;
-static const int PERCENT_Y = 62;
-static const int TANK_TOP = 86;
+// Header in the VGA font: CLAUDE at x 8, mode word at x 68, clock right at 232.
+static const int HEADER_Y = 4;
+static const int MODE_X = 68;
+static const int PERCENT_Y = 50;
+static const int TANK_TOP = 76;
 static const int TANK_WIDTH = 60;
-static const int SEG_HEIGHT = 8;
-static const int SEG_PITCH = 10;
+static const int SEG_HEIGHT = 9;
+static const int SEG_PITCH = 11;
 static const int LABEL_Y = 198;
 static const int BOTTOM_Y = 222;
 
@@ -47,9 +49,9 @@ void saeulenInvalidate() {
 static void drawFrame(bool showUsed) {
   TFT_eSPI& tft = viewTft();
   tft.fillScreen(BACK);
-  viewText("CLAUDE", 8, HEADER_Y, 1, 2, SAEULEN_MAIN, BACK, ML_DATUM, 0);
-  tft.drawFastHLine(8, 26, 224, SAEULEN_LINE);
-  viewText(showUsed ? "VERBRAUCHT" : "FREI", 120, MODE_Y, 2, 1, SAEULEN_DIM, BACK, MC_DATUM, 0);
+  vgaText("CLAUDE", 8, HEADER_Y, ALIGN_LEFT, 1, SAEULEN_MAIN, BACK);
+  vgaText(showUsed ? "VERBRAUCHT" : "\xc3\x9c" "BRIG", MODE_X, HEADER_Y, ALIGN_LEFT, 1, SAEULEN_DIM, BACK);
+  tft.drawFastHLine(8, 24, 224, SAEULEN_LINE);
   drawnClock[0] = '\0';
   cols[0].valid = false;
   cols[1].valid = false;
@@ -112,7 +114,7 @@ void saeulenShow(const UsageView& view) {
     specialInvalidate(special);
   }
   if (textChanged(drawnClock, sizeof(drawnClock), view.clock)) {
-    viewText(view.clock, 232, HEADER_Y, 1, 2, SAEULEN_DIM, BACK, MR_DATUM, 64);
+    vgaText(view.clock, 232, HEADER_Y, ALIGN_RIGHT, 1, SAEULEN_DIM, BACK, 40);
   }
   drawColumn(0, view.session, "SESSION");
   drawColumn(1, view.week, "WOCHE");

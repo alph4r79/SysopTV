@@ -4,7 +4,7 @@
 #pragma once
 #include <stdint.h>
 
-#define SYSOPTV_VERSION "0.3.1"
+#define SYSOPTV_VERSION "0.3.2"
 #define SYSOPTV_HOSTNAME "sysoptv"
 #define SYSOPTV_AP_NAME "SysopTV-Setup"
 
@@ -34,6 +34,9 @@
 #define SYSOPTV_USAGE_MAX_BODY 512
 // Without any packet for this long the screen shows NO CARRIER.
 #define SYSOPTV_USAGE_STALE_MS 600000UL
+// If no packet at all arrives this long after boot, the "Ready" screen
+// makes way for the display without PC (clock, NO CARRIER, IP address).
+#define SYSOPTV_NO_PC_AFTER_MS 120000UL
 // A column turns to the warning colour below this many percent left.
 #define SYSOPTV_WARN_BELOW 20
 
@@ -114,6 +117,5 @@ constexpr uint16_t ANSI_DOT = sysoptvRgb(50, 50, 50);         // dotted rest of 
 constexpr uint16_t AMBER_MAIN = sysoptvRgb(255, 110, 0);
 constexpr uint16_t AMBER_DIM = sysoptvRgb(140, 55, 0);
 constexpr uint16_t AMBER_FRAME = sysoptvRgb(110, 42, 0);
-constexpr uint16_t AMBER_EMPTY = sysoptvRgb(18, 6, 0);        // empty part of a tank
 constexpr uint16_t AMBER_BAR = sysoptvRgb(120, 46, 0);        // status bar at the bottom
 constexpr uint16_t AMBER_WARN = sysoptvRgb(255, 40, 16);

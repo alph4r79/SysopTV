@@ -59,7 +59,7 @@ static void drawFrame(bool showUsed) {
   vgaText("SESSION", TANK_X[0] + TANK_W / 2, LABEL_Y, ALIGN_CENTER, 1, AMBER_MAIN, BACK);
   vgaText("WOCHE", TANK_X[1] + TANK_W / 2, LABEL_Y, ALIGN_CENTER, 1, AMBER_MAIN, BACK);
   tft.fillRect(0, BAR_Y, 240, 240 - BAR_Y, AMBER_BAR);
-  vgaText(showUsed ? "VERBRAUCHT IN %" : "FREI IN %", 6, BAR_Y + 1, ALIGN_LEFT, 1, SYSOPTV_BLACK, AMBER_BAR);
+  vgaText(showUsed ? "VERBRAUCHT IN %" : "\xc3\x9c" "BRIG IN %", 6, BAR_Y + 1, ALIGN_LEFT, 1, SYSOPTV_BLACK, AMBER_BAR);
   drawnClock[0] = '\0';
   cols[0].valid = false;
   cols[1].valid = false;
@@ -76,7 +76,11 @@ static void drawTank(int index, const UsageColumn& col) {
   int filled = (level * h + 50) / 100;
   int fillTop = y + h - filled;
 
-  tft.fillRect(x, y, w, h - filled, AMBER_EMPTY);
+  // Empty part black with a 1 pixel outline, like the empty segments of Klassik.
+  if (filled < h) {
+    tft.fillRect(x + 1, y + 1, w - 2, h - filled - 2, SYSOPTV_BLACK);
+    tft.drawRect(x, y, w, h - filled, col.warn ? ANSI_RED_DIM : AMBER_DIM);
+  }
   if (filled > 0) {
     tft.fillRect(x, fillTop, w, filled, fill);
   }

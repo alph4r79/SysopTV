@@ -67,19 +67,22 @@ header{padding:4px 0 10px;border-bottom:1px solid var(--ln)}
 nav{margin-top:4px}nav a,nav b{margin-right:18px;font-weight:400}nav b{color:var(--fg)}
 a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
 h1{font-size:20px;font-weight:600;color:var(--ac);margin:20px 0 8px}
-h2{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--ln)}
+h2{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:24px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--ln)}
 p{margin:8px 0}.dim{color:var(--dim)}.ok{color:var(--ok)}.er{color:var(--er)}
 .lim{margin:14px 0}.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
 .pct{font-size:26px;font-variant-numeric:tabular-nums}.pct small{font-size:14px;color:var(--dim);margin-left:6px}
 .bar{height:4px;background:var(--ln);margin:6px 0 4px}.bar i{display:block;height:4px;background:var(--ac)}.bar i.warn{background:var(--er)}
 .num{font-variant-numeric:tabular-nums}
 dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:var(--dim)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-label{display:block;margin:14px 0 4px;color:var(--dim)}label.opt{color:var(--fg);margin:8px 0}
+label{display:block;margin:10px 0 4px;color:var(--dim)}label.opt{color:var(--fg);margin:8px 0}
 input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ln);border-radius:2px;padding:10px;width:100%}
 input:focus,select:focus{outline:0;border-color:var(--ac)}
 input[type=checkbox],input[type=radio]{width:auto;margin:0 8px 0 0;vertical-align:middle}
 button{color:var(--ac);border-color:var(--ac);margin-top:16px;cursor:pointer}button.alt{color:var(--dim);border-color:var(--ln)}
 .two{display:flex;gap:12px}.two>div{flex:1}
+.save{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--ln);padding:12px;margin-top:16px;display:flex;align-items:center;gap:12px}
+.save span{flex:1}.save button{width:auto;margin:0;padding:10px 24px}
+@media(min-width:560px){.pair{display:flex;gap:12px}.pair>div{flex:1}}
 code{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}
 @media(min-width:640px){body{padding:0 24px}button{width:auto;padding:10px 24px;margin-right:8px}}
 </style></head><body><div class="wrap">
@@ -496,6 +499,13 @@ static bool parseMinutes(const String& s, uint16_t& out) {
   return true;
 }
 
+// Shows the night mode fields only while the checkbox is set.
+static const char NIGHT_SCRIPT[] PROGMEM = R"JS(<script>
+(function(){var c=document.getElementById('night');if(!c)return;var n=document.querySelectorAll('.night');
+function u(){for(var i=0;i<n.length;i++)n[i].style.display=c.checked?'':'none'}
+c.addEventListener('change',u);u()})();
+</script>)JS";
+
 static void option(Page& p, int value, int current, const String& text) {
   p << F("<option value=\"") << String(value) << (value == current ? F("\" selected>") : F("\">")) << text
     << F("</option>");
@@ -509,41 +519,57 @@ static void handleSettingsForm() {
   Page p;
   p.begin(NAV_SETTINGS);
   p << F("<h1>Einstellungen</h1>");
-  if (server.hasArg("saved")) {
-    p << F("<p class=\"ok\">Gespeichert.</p>");
-  }
-  if (server.hasArg("error")) {
-    p << F("<p class=\"er\">Speichern im Flash ist fehlgeschlagen.</p>");
-  }
 
+  // Display and brightness share one form with the save bar at the bottom.
+  // API key and password have their own forms and buttons further down.
   p << F("<form method=\"post\" action=\"/settings\">") << csrfField();
-  p << F("<h2>Anzeige</h2><label for=\"design\">Design</label><select id=\"design\" name=\"design\">");
+  p << F("<h2>Anzeige</h2><div class=\"pair\"><div><label for=\"design\">Design</label>"
+         "<select id=\"design\" name=\"design\">");
   for (int i = 0; i < DESIGN_COUNT; i++) {
     option(p, i, s.design, designGet(i).htmlName);
   }
-  p << F("</select><label for=\"cycle\">Automatisch wechseln</label><select id=\"cycle\" name=\"cycle\">");
+  p << F("</select></div><div><label for=\"cycle\">Automatisch wechseln</label><select id=\"cycle\" name=\"cycle\">");
   option(p, 0, s.cycleSeconds, F("aus"));
   option(p, 30, s.cycleSeconds, F("alle 30 Sekunden"));
   option(p, 60, s.cycleSeconds, F("alle 60 Sekunden"));
-  p << F("</select><label>Prozent zeigen</label><label class=\"opt\"><input type=\"radio\" name=\"used\" value=\"1\"")
+  p << F("</select></div></div><label>Prozent zeigen</label><label class=\"opt\"><input type=\"radio\" name=\"used\" value=\"1\"")
     << (s.showUsed ? F(" checked") : F("")) << F(">verbraucht (wie auf claude.ai)</label>")
     << F("<label class=\"opt\"><input type=\"radio\" name=\"used\" value=\"0\"") << (s.showUsed ? F("") : F(" checked"))
     << F(">&uuml;brig</label><p class=\"dim\">Die Warnfarbe kommt immer, wenn weniger als 20&nbsp;% "
          "&uuml;brig sind.</p>");
 
-  p << F("<h2>Helligkeit</h2><label for=\"bright\">Helligkeit in Prozent (10 bis 100)</label>"
+  // Fields with class "night" are hidden by the script below while night
+  // mode is off. Without JavaScript they stay visible.
+  p << F("<h2>Helligkeit</h2><label class=\"opt\"><input type=\"checkbox\" id=\"night\" name=\"night\" value=\"1\"")
+    << (s.nightEnabled ? F(" checked") : F("")) << F(">Nachtmodus</label><div class=\"pair\"><div>"
+         "<label for=\"bright\">Helligkeit in Prozent (10 bis 100)</label>"
          "<input id=\"bright\" name=\"bright\" type=\"number\" min=\"10\" max=\"100\" step=\"5\" value=\"")
-    << String(s.brightness) << F("\"><label class=\"opt\"><input type=\"checkbox\" name=\"night\" value=\"1\"")
-    << (s.nightEnabled ? F(" checked") : F("")) << F(">Nachtmodus</label><div class=\"two\"><div>"
+    << String(s.brightness) << F("\"></div><div class=\"night\"><label for=\"nbright\">Helligkeit nachts (0 = Display aus)</label>"
+         "<input id=\"nbright\" name=\"nbright\" type=\"number\" min=\"0\" max=\"100\" step=\"5\" value=\"")
+    << String(s.nightBrightness) << F("\"></div></div><div class=\"two night\"><div>"
          "<label for=\"nfrom\">Von</label><input id=\"nfrom\" name=\"nfrom\" type=\"time\" value=\"")
     << minutesText(s.nightFrom) << F("\"></div><div><label for=\"nto\">Bis</label>"
          "<input id=\"nto\" name=\"nto\" type=\"time\" value=\"") << minutesText(s.nightTo)
-    << F("\"></div></div><label for=\"nbright\">Helligkeit nachts (0 = Display aus)</label>"
-         "<input id=\"nbright\" name=\"nbright\" type=\"number\" min=\"0\" max=\"100\" step=\"5\" value=\"")
-    << String(s.nightBrightness) << F("\"><p class=\"dim\">Der Nachtmodus braucht die Uhrzeit, also Daten "
-         "vom PC oder Internet f&uuml;r die Zeit per NTP.</p><button type=\"submit\">Speichern</button></form>");
+    << F("\"></div></div><p class=\"dim night\">Der Nachtmodus braucht die Uhrzeit, also Daten "
+         "vom PC oder Internet f&uuml;r die Zeit per NTP.</p>");
+
+  p << F("<div class=\"save\"><span");
+  if (server.hasArg("saved")) {
+    p << F(" class=\"ok\">Gespeichert.");
+  } else if (server.hasArg("error")) {
+    p << F(" class=\"er\">Speichern im Flash ist fehlgeschlagen.");
+  } else {
+    p << F(">");
+  }
+  p << F("</span><button type=\"submit\">Speichern</button></div></form>") << FPSTR(NIGHT_SCRIPT);
 
   p << F("<h2>API-Schl&uuml;ssel</h2>");
+  if (server.hasArg("keysaved")) {
+    p << F("<p class=\"ok\">Gespeichert.</p>");
+  }
+  if (server.hasArg("keyerror")) {
+    p << F("<p class=\"er\">Speichern im Flash ist fehlgeschlagen.</p>");
+  }
   if (authHasApiKey()) {
     p << F("<p>Der Sender muss diesen Schl&uuml;ssel mitschicken:</p><p><code>") << authApiKey()
       << F("</code></p><p class=\"dim\">Aufruf: <code>sysoptv-sender.ps1 -ApiKey ") << authApiKey()
@@ -604,9 +630,9 @@ static void handleApiKey() {
     ok = authClearApiKey();
   }
   if (ok) {
-    redirect(F("/settings?saved=1"), 303);
+    redirect(F("/settings?keysaved=1"), 303);
   } else {
-    redirect(F("/settings?error=1"), 303);
+    redirect(F("/settings?keyerror=1"), 303);
   }
 }
 
@@ -957,7 +983,7 @@ static void drawCurrentScreen() {
   } else if (WiFi.status() == WL_CONNECTED) {
     // Once usage data has arrived, the design owns the screen and redraws
     // itself as soon as netScreenFree() is true again.
-    if (rescueMode || !usageHasPacket()) {
+    if (rescueMode || !usageScreenActive()) {
       screenReady(WiFi.localIP().toString(), rescueMode);
     }
   } else {
@@ -1059,6 +1085,11 @@ void netBegin(bool rescue) {
   server.on("/api/info", HTTP_GET, handleInfo);
   server.onNotFound(handleNotFound);
   server.begin();
+}
+
+void netIpText(char* out, size_t size) {
+  String ip = setupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  snprintf(out, size, "%s", ip.c_str());
 }
 
 bool netScreenFree() {

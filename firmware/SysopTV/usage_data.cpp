@@ -134,6 +134,10 @@ const char* usageParse(const char* json, size_t len, UsagePacket& out) {
 // Texts
 // ---------------------------------------------------------------------------
 
+int64_t usageResetRounded(uint32_t resetsAt) {
+  return ((int64_t)resetsAt + 59) / 60 * 60;
+}
+
 int64_t usageDaysFromCivil(int year, int month, int day) {
   // Algorithm from Howard Hinnant, "chrono-compatible low-level date algorithms".
   int64_t y = month <= 2 ? year - 1 : year;
@@ -211,15 +215,17 @@ static void makeColumn(const UsageLimit& limit, bool isSession, const UsageInput
   col.percent = in.showUsed ? col.used : col.remaining;
   // Round up, so anything above 0 shows at least one segment.
   col.segments = (col.percent * USAGE_SEGMENTS + 99) / 100;
+  int64_t reset = usageResetRounded(limit.resetsAt);
   if (limit.resetsAt != 0) {
-    usageFormatClock((int64_t)limit.resetsAt + in.tz, col.resetClock, sizeof(col.resetClock));
+    usageFormatClock(reset + in.tz, col.resetClock, sizeof(col.resetClock));
   }
   if (limit.resetsAt == 0 || !in.clockValid) {
     snprintf(col.bottom, sizeof(col.bottom), isSession ? "noch -:--" : "--");
   } else if (isSession) {
-    usageFormatCountdown((int64_t)limit.resetsAt - in.nowUtc, col.bottom, sizeof(col.bottom));
+    // Counted to the rounded reset, so clock plus countdown gives the reset time.
+    usageFormatCountdown(reset - in.nowUtc, col.bottom, sizeof(col.bottom));
   } else {
-    usageFormatWeekReset(in.nowUtc + in.tz, (int64_t)limit.resetsAt + in.tz, col.bottom, sizeof(col.bottom));
+    usageFormatWeekReset(in.nowUtc + in.tz, reset + in.tz, col.bottom, sizeof(col.bottom));
   }
 }
 

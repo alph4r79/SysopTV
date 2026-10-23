@@ -70,6 +70,15 @@ bool usageHasPacket() {
   return havePacket;
 }
 
+bool usageScreenActive() {
+  // Kept as a flag, so a millis() overflow cannot bring the "Ready" screen back.
+  static bool noPcTimeout = false;
+  if (!noPcTimeout && millis() >= SYSOPTV_NO_PC_AFTER_MS) {
+    noPcTimeout = true;
+  }
+  return havePacket || noPcTimeout;
+}
+
 // Offset of the local time zone (TZ rules from configTime) at time t.
 static int32_t localOffset(time_t t) {
   struct tm lt;
@@ -130,7 +139,7 @@ void usageBuildView(UsageView& out) {
   UsageInput in;
   in.showUsed = settingsGet().showUsed;
   in.state = lastState;
-  in.stale = stale;
+  in.stale = stale || !havePacket;  // no packet yet counts as no data
   int64_t utc = 0;
   int32_t tz = 0;
   in.clockValid = usageTime(utc, tz);

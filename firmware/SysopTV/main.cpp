@@ -91,7 +91,7 @@ static void updateView() {
   static uint8_t shownDesign = 0xFF;
   uint8_t id = designUpdate();
   const Design& design = designGet(id);
-  if (!netScreenFree() || !usageHasPacket()) {
+  if (!netScreenFree() || !usageScreenActive()) {
     viewOnScreen = false;
     return;
   }
@@ -108,6 +108,7 @@ static void updateView() {
   }
   UsageView view;
   usageBuildView(view);
+  netIpText(view.ip, sizeof(view.ip));
   design.show(view);
 }
 

@@ -66,7 +66,7 @@ static void drawFrame(bool showUsed) {
   drawWindow(0, "SESSION");
   drawWindow(1, "WOCHE");
   for (int i = 0; i < 2; i++) {
-    vgaText(showUsed ? "Verbraucht" : "Frei", centreX(i), MODE_Y, ALIGN_CENTER, 1, DOS_GRAY, BACK);
+    vgaText(showUsed ? "Verbraucht" : "\xc3\x9c" "brig", centreX(i), MODE_Y, ALIGN_CENTER, 1, DOS_GRAY, BACK);
   }
   drawnClock[0] = '\0';
   cols[0].valid = false;

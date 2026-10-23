@@ -67,7 +67,7 @@ static void drawFrame(bool showUsed) {
   drawLogo();
   for (int i = 0; i < 2; i++) {
     vgaText(BLOCKS[i].name, 8, BLOCK_Y[i], ALIGN_LEFT, 1, BLOCKS[i].main, BACK);
-    vgaText(showUsed ? "Verbraucht" : "Frei", 8, BLOCK_Y[i] + 18, ALIGN_LEFT, 1, ANSI_WHITE, BACK);
+    vgaText(showUsed ? "Verbraucht" : "\xc3\x9c" "brig", 8, BLOCK_Y[i] + 18, ALIGN_LEFT, 1, ANSI_WHITE, BACK);
   }
   drawnClock[0] = '\0';
   cols[0].valid = false;

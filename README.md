@@ -27,7 +27,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Version 0.3.1.
+Version 0.3.2.
 
 Tested on real hardware:
 
@@ -36,9 +36,6 @@ Tested on real hardware:
 - all six designs with live data
 - clock
 - updates through the `/update` page
-
-Not yet tested on real hardware, so there is no promise that these work:
-
 - admin password and the protection of the pages
 - saving the settings
 - brightness and night mode
@@ -46,6 +43,9 @@ Not yet tested on real hardware, so there is no promise that these work:
 - API key
 - display without the PC (NO CARRIER)
 - `/flashbackup`
+
+Not yet tested on real hardware, so there is no promise that it works:
+
 - going back to the original firmware
 
 ## How it works
@@ -54,7 +54,7 @@ The cube cannot fetch the limits by itself. A small PowerShell script on your Wi
 
 The repository contains exactly this sender in `sender/`. There is no script for the original firmware.
 
-Without the sender the cube shows the "Ready" screen with its IP address after a start. If data has arrived once and then nothing comes for 10 minutes, it shows the clock and "NO CARRIER".
+After a start the cube shows the "Ready" screen with its IP address. If no data arrives within 120 seconds, it switches to the display without PC: the clock, "NO CARRIER" and its IP address small at the bottom. The same happens during operation when no new data comes for 10 minutes. As soon as data arrives, the chosen design appears.
 
 ## Requirements
 
@@ -157,7 +157,7 @@ The values refresh every 10 seconds. Without a password the page also offers the
 
 - design: Säulen, Phosphor, DOS, ANSI, Bernstein or Klassik
 - automatic change: off, every 30 or every 60 seconds
-- show percentages as used ("verbraucht", the default, like on claude.ai) or left ("übrig"). The warning colour always appears when less than 20 % are left.
+- show percentages as used ("verbraucht", the default, like on claude.ai) or remaining ("übrig"). The warning colour always appears when less than 20 % are remaining.
 - brightness 10 to 100 %
 - night mode with a start and end time and its own brightness from 0 to 100 % (0 switches the display off). It needs the time, from the PC or from the internet (NTP).
 - create, show or delete the API key
@@ -176,8 +176,6 @@ The clock comes from the PC. When no data from the PC has arrived for 15 minutes
 ### Forgotten password
 
 Unplug the cube three times in a row, each time within 10 seconds after plugging it in. On the fourth start the password, the API key and all settings are reset. The WLAN stays. The display shows "Passwort zurückgesetzt" (password reset) for a moment. Only starts after plugging in count, crashes and restarts do not.
-
-This has not been tested on real hardware yet.
 
 ### Rescue mode
 

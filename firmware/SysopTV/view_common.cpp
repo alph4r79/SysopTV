@@ -241,6 +241,7 @@ void specialInvalidate(SpecialCache& cache) {
   cache.drawn = false;
   cache.clock[0] = '\0';
   cache.lastData[0] = '\0';
+  cache.ip[0] = '\0';
 }
 
 static void specialText(const SpecialStyle& st, const char* s, int y, uint8_t scale, uint16_t color, int clear) {
@@ -269,7 +270,7 @@ void drawSpecial(const UsageView& view, const SpecialStyle& st, SpecialCache& c,
       specialText(st, "Claude Code starten", 150, 1, st.main, 0);
     } else if (view.screen == USAGE_SCREEN_NO_CARRIER) {
       if (st.smallCarrier) {
-        specialText(st, "NO CARRIER", 210, 1, st.dim, 0);
+        specialText(st, "NO CARRIER", 196, 1, st.dim, 0);
       } else {
         specialText(st, "NO CARRIER", 140, st.vga ? 2 : 3, st.main, 0);
       }
@@ -294,5 +295,9 @@ void drawSpecial(const UsageView& view, const SpecialStyle& st, SpecialCache& c,
   }
   if (textChanged(c.lastData, sizeof(c.lastData), view.lastData)) {
     specialText(st, view.lastData, st.smallCarrier ? 150 : 180, 1, st.dim, 220);
+  }
+  // IP address small at the bottom, so the cube stays findable without PC.
+  if (textChanged(c.ip, sizeof(c.ip), view.ip)) {
+    specialText(st, view.ip, 220, 1, st.dim, 160);
   }
 }

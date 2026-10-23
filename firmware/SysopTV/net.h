@@ -10,3 +10,6 @@ void netLoop();
 // True while nothing else (setup hotspot, lost WLAN, pending restart after an update
 // error) needs the display, so the design may draw.
 bool netScreenFree();
+
+// IP address of the cube as text (station or hotspot).
+void netIpText(char* out, size_t size);

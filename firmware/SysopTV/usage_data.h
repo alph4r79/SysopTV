@@ -62,6 +62,7 @@ struct UsageView {
   UsageColumn session;  // always the last valid values, also on special screens
   UsageColumn week;
   char lastData[24];  // only for USAGE_SCREEN_NO_CARRIER
+  char ip[16];        // IP address of the cube, set by main.cpp
 };
 
 // Input for usageMakeView(), collected by usage.cpp.
@@ -79,6 +80,10 @@ struct UsageInput {
 };
 
 void usageMakeView(const UsageInput& in, UsageView& out);
+
+// Reset time rounded up to the full minute (22:59:59 becomes 23:00, 23:00:00
+// stays). Every reset time and countdown on display and web page uses this.
+int64_t usageResetRounded(uint32_t resetsAt);
 
 // Days since 1970-01-01 for a calendar date (proleptic Gregorian).
 int64_t usageDaysFromCivil(int year, int month, int day);

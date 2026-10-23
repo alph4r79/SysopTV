@@ -80,7 +80,7 @@ static void drawFrame(bool showUsed, bool border) {
     tft.fillRect(240 - BORDER, 0, BORDER, 240, WARN);
   }
   vgaText("SESSION", LEFT, 10, ALIGN_LEFT, 1, DIM, BACK);
-  vgaText(showUsed ? "VERBRAUCHT" : "FREI", RIGHT, 10, ALIGN_RIGHT, 1, DIM, BACK);
+  vgaText(showUsed ? "VERBRAUCHT" : "\xc3\x9c" "BRIG", RIGHT, 10, ALIGN_RIGHT, 1, DIM, BACK);
   tft.fillRect(LEFT, LINE_Y, RIGHT - LEFT, 2, LINE);
   vgaText("WOCHE", LEFT, WEEK_Y, ALIGN_LEFT, 1, DIM, BACK);
   bigValid = false;
