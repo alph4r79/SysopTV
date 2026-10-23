@@ -4,18 +4,18 @@ SysopTV is a free firmware for the GeekMagic SmallTV Ultra. It shows your Claude
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/design-saeulen.jpg" width="180" alt="Design Säulen"><br>Säulen</td>
-    <td align="center"><img src="docs/images/design-phosphor.jpg" width="180" alt="Design Phosphor"><br>Phosphor</td>
-    <td align="center"><img src="docs/images/design-dos.jpg" width="180" alt="Design DOS"><br>DOS</td>
+    <td align="center"><img src="docs/images/design-saeulen.jpg" width="250" alt="Design Säulen"><br>Säulen</td>
+    <td align="center"><img src="docs/images/design-phosphor.jpg" width="250" alt="Design Phosphor"><br>Phosphor</td>
+    <td align="center"><img src="docs/images/design-dos.jpg" width="250" alt="Design DOS"><br>DOS</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/design-ansi.jpg" width="180" alt="Design ANSI"><br>ANSI</td>
-    <td align="center"><img src="docs/images/design-bernstein.jpg" width="180" alt="Design Bernstein"><br>Bernstein</td>
-    <td></td>
+    <td align="center"><img src="docs/images/design-ansi.jpg" width="250" alt="Design ANSI"><br>ANSI</td>
+    <td align="center"><img src="docs/images/design-bernstein.jpg" width="250" alt="Design Bernstein"><br>Bernstein</td>
+    <td align="center"><img src="docs/images/design-klassik.jpg" width="250" alt="Design Klassik"><br>Klassik</td>
   </tr>
 </table>
 
-There are six designs: Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik. Klassik follows the layout of the image that an older PC script made for the original firmware: the session big in the middle, the week as a bar of 16 segments below. A photo of Klassik follows later.
+There are six designs: Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik. Klassik follows the layout of the image that an older PC script made for the original firmware: the session big in the middle, the week as a bar of 16 segments below.
 
 The name comes from the sysop, who in the days of dial-up mailboxes kept an eye on all systems from a single screen.
 
@@ -33,13 +33,12 @@ Tested on real hardware:
 
 - flashing through the web interface of the original firmware
 - WLAN setup through the setup hotspot
-- the designs Säulen, Phosphor, DOS, ANSI and Bernstein with live data
+- all six designs with live data
 - clock
 - updates through the `/update` page
 
 Not yet tested on real hardware, so there is no promise that these work:
 
-- the design Klassik
 - admin password and the protection of the pages
 - saving the settings
 - brightness and night mode
