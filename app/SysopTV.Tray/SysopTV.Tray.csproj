@@ -1,0 +1,43 @@
+<!--
+  SysopTV, Copyright (C) 2026 Christoph Scheel
+  Licensed under the GNU General Public License v3.0, see LICENSE.
+
+  Windows program that sends the Claude usage limits to the cube.
+  The program version is defined only here (Version), build-app.sh and the
+  setup read it from this file.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>SysopTV</AssemblyName>
+    <RootNamespace>SysopTV.Tray</RootNamespace>
+    <Version>0.2.0</Version>
+    <Product>SysopTV</Product>
+    <Description>SysopTV: sendet die Claude-Nutzungslimits an den Würfel</Description>
+    <Copyright>Copyright (C) 2026 Christoph Scheel, GPL-3.0</Copyright>
+    <Company>Christoph Scheel</Company>
+    <ApplicationIcon>..\assets\sysoptv.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>none</DebugType>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- Only assemblies that are part of .NET Framework 4.8, no NuGet packages at runtime. -->
+  <ItemGroup>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.Management" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\assets\sysoptv.ico" Link="sysoptv.ico" LogicalName="SysopTV.Tray.sysoptv.ico" />
+  </ItemGroup>
+
+</Project>

@@ -30,3 +30,10 @@ bool settingsSaveAuth();
 
 // Password reset: password, API key and settings back to defaults, WLAN stays.
 void settingsResetAll();
+
+// Last 4 hex digits of the chip ID, lower case, e.g. "3fa2".
+const char* settingsChipSuffix();
+
+// True if name is a valid device name: 1 to SYSOPTV_NAME_MAX letters,
+// digits or hyphens.
+bool settingsNameValid(const char* name);

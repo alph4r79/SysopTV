@@ -16,7 +16,7 @@ void screenBrightness(uint8_t percent);
 void screenResetDone();
 void screenBoot(bool rescue);
 void screenConnecting(const String& ssid);
-void screenReady(const String& ip, bool rescue);
+void screenReady(const String& ip, const String& host, bool rescue);
 void screenLost();
 void screenSetup(const char* apName);
 void screenUpdateStart();

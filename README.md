@@ -27,7 +27,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Version 0.3.2.
+Firmware version 0.4.0.
 
 Tested on real hardware:
 
@@ -44,37 +44,107 @@ Tested on real hardware:
 - display without the PC (NO CARRIER)
 - `/flashbackup`
 
-Not yet tested on real hardware, so there is no promise that it works:
+Not yet tested on real hardware, so there is no promise that these work:
 
 - going back to the original firmware
+- the device name (new in 0.4.0)
+- `/api/settings` (new in 0.4.0)
+- picture mode with `/api/frame` (new in 0.4.0)
 
 ## How it works
 
-The cube cannot fetch the limits by itself. A small PowerShell script on your Windows PC, the sender, reads the login key of Claude Code locally, asks for the limits and sends only the percentages and reset times to the cube over your local network. The key never leaves the PC and is never sent to the cube.
+The cube cannot fetch the limits by itself. A sender on your Windows PC reads the login key of Claude Code locally, asks for the limits and sends only the percentages and reset times to the cube over your local network. The key never leaves the PC and is never sent to the cube.
 
-The repository contains exactly this sender in `sender/`. There is no script for the original firmware.
+There are two senders, use only one of them:
+
+- the Windows program SysopTV (`app/`), which runs in the notification area of the taskbar and has a settings window
+- the PowerShell script `sender/sysoptv-sender.ps1`, the older and smaller way
+
+Both do the same. There is no script for the original firmware.
 
 After a start the cube shows the "Ready" screen with its IP address. If no data arrives within 120 seconds, it switches to the display without PC: the clock, "NO CARRIER" and its IP address small at the bottom. The same happens during operation when no new data comes for 10 minutes. As soon as data arrives, the chosen design appears.
 
 ## Requirements
 
 - GeekMagic SmallTV Ultra with ESP8266. Other models, for example the Pro or variants with ESP32, are not supported. Do not flash SysopTV onto them.
-- A Windows PC with Windows PowerShell 5.1 in the same network.
+- A Windows PC in the same network: Windows 10 or 11 with .NET Framework 4.8 for the Windows program, or Windows PowerShell 5.1 for the script. Both are part of current Windows versions.
 - Claude Code installed and logged in with a Claude subscription. The file `.credentials.json` must exist in the folder `.claude` of your user profile.
 
 ## Installing the firmware
 
 1. Download `sysoptv-<version>.bin` from the GitHub Releases, or build it yourself (see "Building").
 2. Open the web interface of the original GeekMagic firmware in your browser, using the IP address of the cube. At the bottom, under "Firmware update", select the .bin file and upload it.
-3. After the restart SysopTV tries a saved WLAN for 20 seconds. The WLAN of the original firmware is not taken over, so on the first start it opens an open hotspot named `SysopTV-Setup`.
-4. Connect your phone or laptop to `SysopTV-Setup` and open `http://192.168.4.1` in the browser. Pick your network (2.4 GHz only), enter the password and save. The cube restarts and shows its IP address on the display.
-5. From then on SysopTV is reachable at that IP address or at `http://sysoptv.local`.
+3. After the restart SysopTV tries a saved WLAN for 20 seconds. The WLAN of the original firmware is not taken over, so on the first start it opens an open hotspot named `SysopTV-Setup-xxxx`, where `xxxx` are the last four hex digits of the chip ID of this cube.
+4. Connect your phone or laptop to `SysopTV-Setup-xxxx` and open `http://192.168.4.1` in the browser. Pick your network (2.4 GHz only), enter the password and save. The cube restarts and shows its IP address on the display.
+5. From then on SysopTV is reachable at that IP address or at `http://sysoptv-xxxx.local` (the same four hex digits). The name can be changed in the settings, see "Device name".
 6. Give the cube a fixed IP address in your router. The sender needs the address, and it should not change.
 7. First thing: set the admin password on the overview page. It needs at least 8 characters (at most 64). When the browser asks for the login, the user name does not matter.
 
 If nobody connects to the hotspot for three minutes and a WLAN is saved, SysopTV restarts and tries the saved WLAN again, in case the router was just off for a moment.
 
-## Setting up the sender
+## Windows program
+
+The Windows program SysopTV does the same as the PowerShell script, but runs in the notification area of the taskbar and can be set up in a window. It asks for the limits every 120 seconds and sends them to the cube, with the same rules as the script for errors and for the server limit (see "When something fails").
+
+Since version 0.2.0 it can feed several cubes. Each cube in the list gets one function:
+
+- **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
+- **Claude als Bild** (Claude as picture): the program draws the DOS design of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode).
+- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop in the DOS style, also as a picture. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
+
+The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed area. After a restart of the cube and at least every 10 minutes the whole picture goes out.
+
+Version 0.2.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+
+The icon in the taskbar shows the state by colour:
+
+- green: data is being sent
+- amber: less than 20 % left, or the login of Claude Code has expired
+- red: no data from Anthropic, or the cube is not reachable
+- grey: no data yet
+
+Right-click the icon for the menu: current state, send now, open the cube in the browser, settings, open the log, exit. A double-click opens the settings.
+
+### Download and installation
+
+Download one of these files from the GitHub Releases:
+
+- `sysoptv-app-<version>-setup.exe`: the setup. It installs without administrator rights to `%LOCALAPPDATA%\Programs\SysopTV`, adds an entry to the start menu and can start the program with Windows.
+- `sysoptv-app-<version>-portable.zip`: the same program without setup. Unpack it anywhere and start `SysopTV.exe`.
+
+The program is not signed. On the first start Windows SmartScreen may show "Der Computer wurde durch Windows geschützt" with "Unbekannter Herausgeber" (unknown publisher). Click "Weitere Informationen" (more info), then "Trotzdem ausführen" (run anyway). The warning appears because a code signing certificate costs money every year. The source code is open in this repository, and you can build the program yourself (see "Building").
+
+### Settings
+
+At the top the window shows the current values, the state and the time of the last sending.
+
+- **Würfel** (cubes): the list of cubes with name, address and function. "Suchen" (search) looks for cubes in your local network, a click on a result adds it. "Von Hand hinzufügen" (add by hand), "Entfernen" (remove) and "Verbindung testen" (test connection, shows firmware version and uptime). For the selected cube: address, function, the optional API key (see "Optional API key") and the admin password of the cube, which the program needs for the display settings.
+- **Anzeige auf dem Würfel** (display on the cube): for cubes with firmware 0.4.0 or newer the program reads and saves design, automatic change, used or remaining, brightness, night mode and device name directly ("Vom Würfel laden", "Auf dem Würfel speichern"). For older firmware a button opens the settings page of the cube in the browser.
+- **Shop (Shopify)**: shop address, the name for the display and the access, see "Shopify".
+- **Programm** (program): the interval for Claude in seconds (at least 120), "Mit Windows starten" (start with Windows) and a button for the log folder.
+
+The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. A configuration of version 0.1.0 is taken over automatically as one cube with "Claude, Würfel zeichnet selbst". The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
+
+If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC.
+
+For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes the pictures "Claude als Bild" and "Shop als Bild" with sample data as PNG files, without network.
+
+### Shopify
+
+The program reads the orders over the Shopify GraphQL Admin API, version `2026-10`. It needs the access scope `read_orders`. Shopify only returns the last 60 days without `read_all_orders`, which is enough for the current month. Cancelled and test orders are not counted. The shop is asked every 5 minutes.
+
+Shown are orders and revenue for today, yesterday, the last 7 days and the current month (in the time zone of the shop), the number of open orders that are not shipped yet, and time and amount of the last order.
+
+Shopify no longer lets you create new custom apps in the shop admin. For your own shop the official way is an app in the Shopify Dev Dashboard with the client credentials grant. Follow the official guides on shopify.dev, the menus there can change:
+
+- [Create apps using the Dev Dashboard](https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard): create the app, give its version the scope `read_orders`, release it and install it on your shop.
+- [Client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant): the app settings show a client ID and a client secret. Enter both in SysopTV. The program gets a token with them itself, which lasts 24 hours and is renewed when needed. This only works if the app and the shop belong to the same Shopify organization.
+
+If you still have an older custom app from the shop admin, its Admin API access token (it starts with `shpat_`) works as well. Enter it in the field "Admin-API-Zugriffstoken" instead of client ID and secret, see [Shopify: admin-created custom apps](https://shopify.dev/docs/apps/build/authentication-authorization/legacy/admin-custom-apps).
+
+## Setting up the PowerShell script
+
+Use the script instead of the Windows program, not together with it. Two senders would ask for the limits twice.
 
 The sender is the file `sender/sysoptv-sender.ps1`. It needs nothing besides Windows PowerShell 5.1, which is part of Windows.
 
@@ -101,7 +171,7 @@ If the window says that the sender is already running, another sender is active 
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `-DeviceIp` | `sysoptv.local` | Address of the cube. An IP address is more reliable than the name. |
+| `-DeviceIp` | `sysoptv.local` | Address of the cube. An IP address is more reliable than the name. Since firmware 0.4.0 the name is `sysoptv-xxxx.local` (see "Device name"), so give the address explicitly. |
 | `-IntervalSeconds` | `120` | Seconds between two queries. |
 | `-ApiKey` | empty | Only needed if an API key is set in the cube, see below. |
 | `-Once` | off | One single run with output in the window, for testing. |
@@ -135,7 +205,7 @@ A single failed query does not change the display. The sender keeps sending the 
 Without an API key, anyone in your network can send values to the cube. With a key, only a sender that knows the key may do that.
 
 1. Open "Einstellungen" (settings) in the web interface and press "Neuen Schlüssel erzeugen" (create new key).
-2. Add the key shown there to the sender: `-ApiKey <key>`. Do this in the test command and in the startup shortcut as well.
+2. Windows program: enter the key under "API-Schlüssel" in its settings. PowerShell script: add `-ApiKey <key>` to the test command and to the startup shortcut.
 
 If the key is missing or wrong, the cube answers with error 401 and the log of the sender says so.
 
@@ -171,6 +241,27 @@ The settings are stored permanently in the cube and are only written when someth
 
 The clock comes from the PC. When no data from the PC has arrived for 15 minutes, SysopTV uses internet time (NTP, pool.ntp.org) with the time zone of Germany (Europe/Berlin, including daylight saving time).
 
+## Device name
+
+Since firmware 0.4.0 every cube has a device name, so several cubes can run in one network. The default is `sysoptv-` plus the last four hex digits of the chip ID, for example `sysoptv-3fa2`. The cube is then reachable at `http://sysoptv-3fa2.local`, and its setup hotspot is called `SysopTV-Setup-3fa2`.
+
+The name can be changed under "Einstellungen" (settings), section "Gerät" (device): letters, digits and hyphen, 1 to 24 characters. A new name takes effect at once for the `.local` address. The overview shows the name.
+
+## Interfaces for the Windows program
+
+These are used by the Windows program. They are documented here for anyone who wants to write their own sender.
+
+- `GET /api/info` (always open): status as JSON. Since 0.4.0 also `deviceName` and `capabilities` (`["usage","settings","frame"]`).
+- `POST /api/usage`: usage data from the sender, see the existing senders. Needs the header `X-SysopTV-Key` if an API key is set.
+- `GET /api/settings` and `POST /api/settings`: the display settings as JSON (design, automatic change, used or remaining, brightness, night mode, device name). Both need the admin password (HTTP Basic Auth) if one is set. `POST` only works with `Content-Type: application/json` and the header `X-SysopTV-Client: app`, otherwise the cube answers 400. All fields are optional, the values are checked like on the settings page. The answer contains the stored values. The cube allows no cross-origin requests (no CORS), so web pages cannot use this interface.
+- `POST /api/frame`: picture mode, see below.
+
+## Picture mode
+
+Since firmware 0.4.0 a PC can draw the whole screen itself and send it as a picture. The cube then only shows these pictures and does not draw its own designs over them. If no picture arrives for 3 minutes, it shows its own display without PC (clock or NO CARRIER with the IP address). If usage data arrives again instead of pictures, it draws its own designs again. Brightness and night mode also apply in picture mode.
+
+The pictures are sent as a small, run length compressed format, also as parts of the screen. The format is described in [docs/frame-format.md](docs/frame-format.md).
+
 ## Emergencies
 
 ### Forgotten password
@@ -186,6 +277,8 @@ If the firmware crashes three times in a row, SysopTV starts in rescue mode. It 
 This has not been tested yet, so there are no instructions here for now.
 
 ## Building
+
+### Firmware
 
 You need arduino-cli, the esp8266 core 3.1.2, TFT_eSPI 2.5.43 and ArduinoJson 7.4.3:
 
@@ -208,6 +301,25 @@ The script checks that exactly these library versions are installed. The firmwar
 
 The flash layout is 4M3M, the same as the original firmware: program and update buffer below 0x100000, the area of the original firmware from 0x100000 to 0x3FA000 is never written. SysopTV stores its settings in the 4 KB EEPROM sector at 0x3FB000.
 
+### Windows program
+
+You need the .NET SDK (version 6 or newer, it builds for .NET Framework 4.8) and for the setup Inno Setup 6:
+
+```powershell
+winget install --id Microsoft.DotNet.SDK.8 -e
+winget install --id JRSoftware.InnoSetup -e
+```
+
+Then run in Git Bash:
+
+```sh
+bash build-app.sh
+```
+
+The script builds the program and puts `sysoptv-app-<version>-portable.zip` and, if Inno Setup is installed, `sysoptv-app-<version>-setup.exe` into `dist/`. The program version is set in `app/SysopTV.Tray/SysopTV.Tray.csproj`, it is separate from the firmware version. The program uses only what .NET Framework 4.8 brings along, no extra packages.
+
+### Hardware
+
 Hardware for contributors: ESP8266 (ESP-12F), 4 MB flash, 26 MHz crystal, ST7789 display with 240x240 pixels without CS line in SPI mode 3. Pins: MOSI 13, SCLK 14, DC 0, RST 2, backlight 5 (active low).
 
 ## Plans
@@ -216,7 +328,7 @@ Later the cube should be able to show other data as well, for example orders fro
 
 ## License and thanks
 
-The firmware and the sender are licensed under the GNU General Public License v3.0, see [LICENSE](LICENSE).
+The firmware, the Windows program and the PowerShell script are licensed under the GNU General Public License v3.0, see [LICENSE](LICENSE).
 
 The embedded font in `firmware/SysopTV/font_vga.h` is **not** under the GPL. It is converted from "Px437 IBM VGA 8x16" of [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 

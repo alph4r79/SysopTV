@@ -4,9 +4,13 @@
 #pragma once
 #include <stdint.h>
 
-#define SYSOPTV_VERSION "0.3.2"
-#define SYSOPTV_HOSTNAME "sysoptv"
-#define SYSOPTV_AP_NAME "SysopTV-Setup"
+#define SYSOPTV_VERSION "0.4.0"
+// Default device name and hotspot name get the last 4 hex digits of the chip
+// ID appended, so several cubes in one network have different names.
+#define SYSOPTV_NAME_PREFIX "sysoptv-"
+#define SYSOPTV_AP_PREFIX "SysopTV-Setup-"
+// Device name: letters, digits and hyphen.
+#define SYSOPTV_NAME_MAX 24
 
 // How long the boot screen stays visible.
 #define SYSOPTV_BOOT_SCREEN_MS 2000UL
@@ -32,6 +36,11 @@
 // Usage data from the PC (POST /api/usage).
 // Larger bodies are rejected. A full packet is about 150 bytes.
 #define SYSOPTV_USAGE_MAX_BODY 512
+// POST /api/settings, larger bodies are rejected.
+#define SYSOPTV_SETTINGS_MAX_BODY 1024
+// Picture mode (POST /api/frame): without a new picture for this long the
+// cube goes back to its own display.
+#define SYSOPTV_FRAME_TIMEOUT_MS 180000UL
 // Without any packet for this long the screen shows NO CARRIER.
 #define SYSOPTV_USAGE_STALE_MS 600000UL
 // If no packet at all arrives this long after boot, the "Ready" screen

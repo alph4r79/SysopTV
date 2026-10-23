@@ -1,0 +1,242 @@
+// SysopTV, Copyright (C) 2026 Christoph Scheel
+// Licensed under the GNU General Public License v3.0, see LICENSE.
+//
+// Orders and revenue from the Shopify GraphQL Admin API (version 2026-10).
+// Needed access scope: read_orders. Without read_all_orders Shopify only
+// returns the last 60 days, which is enough for the current month.
+//
+// Access either with an Admin API access token of an older custom app, or
+// with client ID and secret of an app from the Shopify Dev Dashboard
+// (client credentials grant, the token lasts 24 hours and is fetched again).
+// Tokens are never logged.
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Web.Script.Serialization;
+
+namespace SysopTV.Tray
+{
+    internal sealed class ShopifyClient
+    {
+        internal const string ApiVersion = "2026-10";
+        private const int MaxPages = 40;   // 40 x 250 orders per month is plenty
+        private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+
+        private string cachedToken;
+        private DateTime cachedUntil = DateTime.MinValue;
+
+        internal ShopData Fetch(ShopConfig cfg)
+        {
+            var result = new ShopData { FetchedAt = DateTime.Now };
+            try
+            {
+                string domain = NormalizeDomain(cfg.Domain);
+                if (domain.Length == 0)
+                {
+                    result.Error = "keine Shop-Adresse";
+                    return result;
+                }
+                string token = Token(cfg, domain);
+
+                // Time zone of the shop: the offset in minutes is enough for day and month limits.
+                var shop = Query(domain, token, "{ shop { timezoneOffsetMinutes } }", null);
+                int offset = Convert.ToInt32(Dict(Dict(shop, "shop"), "timezoneOffsetMinutes")["__value"] ?? 0,
+                                             CultureInfo.InvariantCulture);
+                DateTime shopNow = DateTime.UtcNow.AddMinutes(offset);
+                DateTime today = shopNow.Date;
+                DateTime weekStart = today.AddDays(-6);
+                DateTime monthStart = new DateTime(today.Year, today.Month, 1);
+                DateTime from = weekStart < monthStart ? weekStart : monthStart;
+                string sinceUtc = from.AddMinutes(-offset).ToString("yyyy-MM-ddTHH:mm:ss'Z'", CultureInfo.InvariantCulture);
+
+                string filter = "created_at:>='" + sinceUtc + "' AND test:false AND NOT status:cancelled";
+                string cursor = null;
+                bool first = true;
+                for (int page = 0; page < MaxPages; page++)
+                {
+                    var vars = new Dictionary<string, object> { { "q", filter }, { "after", cursor } };
+                    var data = Query(domain, token,
+                        "query($q:String!,$after:String){ orders(first:250, after:$after, query:$q, sortKey:CREATED_AT, reverse:true)" +
+                        "{ pageInfo{ hasNextPage endCursor } nodes{ createdAt cancelledAt test totalPriceSet{ shopMoney{ amount } } } } }",
+                        vars);
+                    var orders = Dict(data, "orders");
+                    foreach (object o in List(orders, "nodes"))
+                    {
+                        var node = o as Dictionary<string, object>;
+                        if (node == null || node["cancelledAt"] != null || true.Equals(node["test"]))
+                        {
+                            continue;
+                        }
+                        DateTime created = DateTimeOffset.Parse((string)node["createdAt"], CultureInfo.InvariantCulture)
+                                                         .UtcDateTime.AddMinutes(offset);
+                        decimal amount = decimal.Parse((string)Dict(Dict(node, "totalPriceSet"), "shopMoney")["amount"],
+                                                       CultureInfo.InvariantCulture);
+                        if (first)
+                        {
+                            result.LastOrderTime = created;
+                            result.LastOrderAmount = amount;
+                            first = false;
+                        }
+                        Add(result.Today, created.Date == today, amount);
+                        Add(result.Yesterday, created.Date == today.AddDays(-1), amount);
+                        Add(result.Week, created.Date >= weekStart, amount);
+                        Add(result.Month, created.Date >= monthStart, amount);
+                    }
+                    var info = Dict(orders, "pageInfo");
+                    if (!true.Equals(info["hasNextPage"]))
+                    {
+                        break;
+                    }
+                    cursor = (string)info["endCursor"];
+                }
+
+                if (first)
+                {
+                    // No order in the window: the last order is older.
+                    var last = Query(domain, token,
+                        "{ orders(first:1, sortKey:CREATED_AT, reverse:true, query:\"test:false AND NOT status:cancelled\")" +
+                        "{ nodes{ createdAt totalPriceSet{ shopMoney{ amount } } } } }", null);
+                    foreach (object o in List(Dict(last, "orders"), "nodes"))
+                    {
+                        var node = (Dictionary<string, object>)o;
+                        result.LastOrderTime = DateTimeOffset.Parse((string)node["createdAt"], CultureInfo.InvariantCulture)
+                                                             .UtcDateTime.AddMinutes(offset);
+                        result.LastOrderAmount = decimal.Parse((string)Dict(Dict(node, "totalPriceSet"), "shopMoney")["amount"],
+                                                               CultureInfo.InvariantCulture);
+                    }
+                }
+
+                var open = Query(domain, token,
+                    "{ ordersCount(query:\"fulfillment_status:unshipped AND status:open AND test:false\", limit:null){ count } }", null);
+                result.Unshipped = Convert.ToInt32(Dict(open, "ordersCount")["count"], CultureInfo.InvariantCulture);
+            }
+            catch (Exception ex)
+            {
+                result.Error = ex.Message;
+            }
+            return result;
+        }
+
+        private static void Add(ShopPeriod p, bool inside, decimal amount)
+        {
+            if (inside)
+            {
+                p.Orders++;
+                p.Revenue += amount;
+            }
+        }
+
+        internal static string NormalizeDomain(string domain)
+        {
+            string d = (domain ?? "").Trim().ToLowerInvariant();
+            if (d.StartsWith("https://"))
+            {
+                d = d.Substring(8);
+            }
+            return d.TrimEnd('/');
+        }
+
+        // Access token: given directly, or fetched with client ID and secret.
+        private string Token(ShopConfig cfg, string domain)
+        {
+            string direct = cfg.AccessToken;
+            if (!string.IsNullOrEmpty(direct))
+            {
+                return direct;
+            }
+            if (cachedToken != null && DateTime.Now < cachedUntil)
+            {
+                return cachedToken;
+            }
+            string id = cfg.ClientId, secret = cfg.ClientSecret;
+            if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(secret))
+            {
+                throw new InvalidOperationException("kein Zugang eingetragen");
+            }
+            var form = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                { "grant_type", "client_credentials" }, { "client_id", id }, { "client_secret", secret }
+            });
+            using (HttpResponseMessage resp = Http.PostAsync("https://" + domain + "/admin/oauth/access_token", form).GetAwaiter().GetResult())
+            {
+                string body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                if (!resp.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException("Anmeldung bei Shopify: HTTP " + (int)resp.StatusCode);
+                }
+                var j = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(body);
+                cachedToken = (string)j["access_token"];
+                int seconds = Convert.ToInt32(j["expires_in"], CultureInfo.InvariantCulture);
+                cachedUntil = DateTime.Now.AddSeconds(Math.Max(60, seconds - 300));
+                return cachedToken;
+            }
+        }
+
+        // One GraphQL call. Waits and tries again if Shopify reports THROTTLED.
+        private static Dictionary<string, object> Query(string domain, string token, string query, Dictionary<string, object> vars)
+        {
+            var ser = new JavaScriptSerializer();
+            string payload = ser.Serialize(new Dictionary<string, object> { { "query", query }, { "variables", vars ?? new Dictionary<string, object>() } });
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                using (var req = new HttpRequestMessage(HttpMethod.Post, "https://" + domain + "/admin/api/" + ApiVersion + "/graphql.json"))
+                {
+                    req.Headers.TryAddWithoutValidation("X-Shopify-Access-Token", token);
+                    req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+                    using (HttpResponseMessage resp = Http.SendAsync(req).GetAwaiter().GetResult())
+                    {
+                        string body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                        if ((int)resp.StatusCode == 429)
+                        {
+                            Thread.Sleep(2000 * (attempt + 1));
+                            continue;
+                        }
+                        if (!resp.IsSuccessStatusCode)
+                        {
+                            throw new InvalidOperationException("Shopify: HTTP " + (int)resp.StatusCode);
+                        }
+                        var j = (Dictionary<string, object>)ser.DeserializeObject(body);
+                        object errors;
+                        if (j.TryGetValue("errors", out errors) && errors != null)
+                        {
+                            if (ser.Serialize(errors).Contains("THROTTLED"))
+                            {
+                                Thread.Sleep(2000 * (attempt + 1));
+                                continue;
+                            }
+                            throw new InvalidOperationException("Shopify meldet einen Fehler in der Abfrage");
+                        }
+                        return Dict(j, "data");
+                    }
+                }
+            }
+            throw new InvalidOperationException("Shopify bremst, später erneut");
+        }
+
+        // Child object; a plain value comes back under the key "__value".
+        private static Dictionary<string, object> Dict(Dictionary<string, object> d, string key)
+        {
+            object o;
+            if (d == null || !d.TryGetValue(key, out o) || o == null)
+            {
+                return new Dictionary<string, object> { { "__value", null } };
+            }
+            var child = o as Dictionary<string, object>;
+            return child ?? new Dictionary<string, object> { { "__value", o } };
+        }
+
+        private static IEnumerable<object> List(Dictionary<string, object> d, string key)
+        {
+            object o;
+            if (d != null && d.TryGetValue(key, out o) && o is object[])
+            {
+                return (object[])o;
+            }
+            return new object[0];
+        }
+    }
+}

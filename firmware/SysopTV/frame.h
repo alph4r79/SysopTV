@@ -1,0 +1,40 @@
+// SysopTV, Copyright (C) 2026 Christoph Scheel
+// Licensed under the GNU General Public License v3.0, see LICENSE.
+//
+// Picture mode: decodes a picture in the format "SYF1" (docs/frame-format.md)
+// while it is being received and draws it line by line. At most one line of
+// 240 pixels is buffered.
+//
+// Format, all numbers little endian:
+//   header  12 bytes: "SYF1", x, y, width, height (uint16 each)
+//   pixels  width * height pixels, row by row, as RLE packets:
+//           control byte c
+//             c & 0x80 set:   run, (c & 0x7F) + 1 pixels (1 to 128) of one
+//                             colour, followed by 1 colour (2 bytes RGB565)
+//             c & 0x80 clear: literal, c + 1 pixels (1 to 128) follow, each
+//                             2 bytes RGB565
+//           Packets may span lines. Exactly width * height pixels, no
+//           extra bytes after the last pixel.
+
+#pragma once
+#include <stddef.h>
+#include <stdint.h>
+
+// Starts decoding a new picture.
+void frameStart();
+
+// Feeds received bytes. Returns false on an error, see frameError().
+bool frameFeed(const uint8_t* data, size_t len);
+
+// Call after the last byte. Returns true if the picture was complete.
+bool frameFinish();
+
+// Short error text after frameFeed() or frameFinish() returned false.
+const char* frameError();
+
+// True while picture mode is on: a picture arrived within
+// SYSOPTV_FRAME_TIMEOUT_MS. While on, the designs must not draw.
+bool frameModeActive();
+
+// Ends picture mode at once, for example when usage data arrives.
+void frameModeEnd();

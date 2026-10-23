@@ -2,7 +2,10 @@
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 
 #include "settings.h"
+#include "config.h"
 #include "design.h"
+#include <Arduino.h>
+#include <stdio.h>
 #include <string.h>
 
 static Settings settings;
@@ -20,7 +23,31 @@ Settings settingsDefaults() {
   s.nightBrightness = 10;
   s.nightFrom = 22 * 60;
   s.nightTo = 7 * 60;
+  snprintf(s.deviceName, sizeof(s.deviceName), SYSOPTV_NAME_PREFIX "%s", settingsChipSuffix());
   return s;
+}
+
+const char* settingsChipSuffix() {
+  static char suffix[5] = "";
+  if (!suffix[0]) {
+    snprintf(suffix, sizeof(suffix), "%04x", (unsigned)(ESP.getChipId() & 0xFFFF));
+  }
+  return suffix;
+}
+
+bool settingsNameValid(const char* name) {
+  size_t len = strlen(name);
+  if (len < 1 || len > SYSOPTV_NAME_MAX) {
+    return false;
+  }
+  for (size_t i = 0; i < len; i++) {
+    char c = name[i];
+    bool ok = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-';
+    if (!ok) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void settingsSanitize(Settings& s) {
@@ -46,6 +73,10 @@ void settingsSanitize(Settings& s) {
   }
   if (s.nightTo >= 24 * 60) {
     s.nightTo = d.nightTo;
+  }
+  s.deviceName[sizeof(s.deviceName) - 1] = '\0';
+  if (!settingsNameValid(s.deviceName)) {
+    memcpy(s.deviceName, d.deviceName, sizeof(s.deviceName));
   }
 }
 

@@ -106,7 +106,7 @@ void screenConnecting(const String& ssid) {
   center(shorten(ssid, 16), 130, 4, cAmber);
 }
 
-void screenReady(const String& ip, bool rescue) {
+void screenReady(const String& ip, const String& host, bool rescue) {
   header();
   if (rescue) {
     center("RETTUNGSMODUS", 52, 2, cRed);
@@ -115,7 +115,7 @@ void screenReady(const String& ip, bool rescue) {
   }
   center("IP-Adresse", 84, 2, cDim);
   center(ip, 112, 4, cAmber);
-  center(SYSOPTV_HOSTNAME ".local", 140, 2, cDim);
+  center(host, 140, 2, cDim);
   tft.drawFastHLine(12, 164, 216, cDark);
   center("Update im Browser:", 186, 2, cDim);
   center(ip + "/update", 208, 2, cAmber);

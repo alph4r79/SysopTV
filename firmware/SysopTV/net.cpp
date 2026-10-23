@@ -14,6 +14,10 @@
 //
 // Pages are sent in pieces (chunked) with the CSS and fixed parts straight
 // from flash, so no page is ever built as one big string in RAM.
+//
+// JSON interfaces for the Windows program: /api/info (open), /api/usage and
+// /api/frame (API key if set), /api/settings (admin password, only with
+// Content-Type application/json and X-SysopTV-Client: app, no CORS).
 
 #include "net.h"
 #include "config.h"
@@ -22,6 +26,7 @@
 #include "auth.h"
 #include "settings.h"
 #include "design.h"
+#include "frame.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
@@ -174,6 +179,15 @@ static void messagePage(NavItem nav, int code, const __FlashStringHelper* title,
   p << F("<h1>") << title << F("</h1><p") << (error ? F(" class=\"er\">") : F(">")) << text
     << F("</p><p><a href=\"") << backHref << F("\">") << backText << F("</a></p>");
   p.end();
+}
+
+// Hotspot name with the last 4 hex digits of the chip ID.
+static String apName() {
+  return String(F(SYSOPTV_AP_PREFIX)) + settingsChipSuffix();
+}
+
+static String mdnsName() {
+  return String(settingsGet().deviceName) + F(".local");
 }
 
 static void redirect(const __FlashStringHelper* location, int code) {
@@ -378,7 +392,7 @@ t(k+'p',c.text);t(k+'m',u.mode);t(k+'r',c.reset);var b=document.getElementById(k
 if(b){b.style.width=c.bar+'%';b.className=c.warn?'warn':''}});
 var d=document.getElementById('ds');if(d){d.textContent=u.status;d.className=u.statusOk?'ok':'er'}
 t('dd',j.designText)}
-t('i-ssid',j.ssid);t('i-ip',j.ip);t('i-sig',j.signalText);t('i-time',j.timeText);
+t('i-name',j.deviceName);t('i-ssid',j.ssid);t('i-ip',j.ip);t('i-sig',j.signalText);t('i-time',j.timeText);
 t('i-up',j.uptimeText);t('i-heap',j.heapKb+' KB');t('i-rst',j.resetReason)}).catch(function(){})}
 setInterval(up,10000);
 </script>)JS";
@@ -412,9 +426,10 @@ static void handleStatus() {
   }
 
   p << F("<h2>Ger&auml;t</h2><dl>");
-  deviceRow(p, F("WLAN"), "i-ssid", setupMode ? String(F(SYSOPTV_AP_NAME " (Hotspot)")) : WiFi.SSID());
+  deviceRow(p, F("Ger&auml;tename"), "i-name", settingsGet().deviceName);
+  deviceRow(p, F("WLAN"), "i-ssid", setupMode ? apName() + F(" (Hotspot)") : WiFi.SSID());
   deviceRow(p, F("IP-Adresse"), "i-ip", setupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString());
-  deviceRow(p, F("mDNS-Name"), "i-mdns", F(SYSOPTV_HOSTNAME ".local"));
+  deviceRow(p, F("mDNS-Name"), "i-mdns", mdnsName());
   deviceRow(p, F("Signal"), "i-sig", signalText());
   deviceRow(p, F("Uhrzeit synchronisiert"), "i-time", timeText());
   deviceRow(p, F("Laufzeit"), "i-up", uptimeText());
@@ -540,6 +555,11 @@ static void handleSettingsForm() {
 
   // Fields with class "night" are hidden by the script below while night
   // mode is off. Without JavaScript they stay visible.
+  p << F("<h2>Ger&auml;t</h2><label for=\"devname\">Ger&auml;tename (Buchstaben, Ziffern, Bindestrich, bis 24 Zeichen)</label>"
+         "<input id=\"devname\" name=\"devname\" maxlength=\"24\" pattern=\"[A-Za-z0-9\\-]{1,24}\" value=\"")
+    << htmlEscape(s.deviceName) << F("\"><p class=\"dim\">Im Netz erreichbar als <code>") << htmlEscape(mdnsName())
+    << F("</code>. Mehrere W&uuml;rfel brauchen verschiedene Namen.</p>");
+
   p << F("<h2>Helligkeit</h2><label class=\"opt\"><input type=\"checkbox\" id=\"night\" name=\"night\" value=\"1\"")
     << (s.nightEnabled ? F(" checked") : F("")) << F(">Nachtmodus</label><div class=\"pair\"><div>"
          "<label for=\"bright\">Helligkeit in Prozent (10 bis 100)</label>"
@@ -558,6 +578,8 @@ static void handleSettingsForm() {
     p << F(" class=\"ok\">Gespeichert.");
   } else if (server.hasArg("error")) {
     p << F(" class=\"er\">Speichern im Flash ist fehlgeschlagen.");
+  } else if (server.hasArg("nameerror")) {
+    p << F(" class=\"er\">Ger&auml;tename ung&uuml;ltig, nichts gespeichert.");
   } else {
     p << F(">");
   }
@@ -593,11 +615,21 @@ static void handleSettingsForm() {
   p.end();
 }
 
+static void applyNameChange(const String& before);
+
 static void handleSettingsSave() {
   if (blockedInRescue() || !requireAuth() || !requireCsrf()) {
     return;
   }
   Settings s = settingsGet();
+  String before = s.deviceName;
+  String name = server.arg("devname");
+  name.trim();
+  if (!settingsNameValid(name.c_str())) {
+    redirect(F("/settings?nameerror=1"), 303);
+    return;
+  }
+  snprintf(s.deviceName, sizeof(s.deviceName), "%s", name.c_str());
   s.design = (uint8_t)server.arg("design").toInt();
   s.cycleSeconds = (uint8_t)server.arg("cycle").toInt();
   s.showUsed = server.arg("used") == "1" ? 1 : 0;
@@ -612,6 +644,7 @@ static void handleSettingsSave() {
     s.nightTo = m;
   }
   if (settingsUpdate(s)) {
+    applyNameChange(before);
     redirect(F("/settings?saved=1"), 303);
   } else {
     redirect(F("/settings?error=1"), 303);
@@ -680,7 +713,7 @@ static void handleRescan() {
     return;
   }
   messagePage(NAV_NONE, 200, F("Netze neu suchen"),
-              F("SysopTV sucht neu und startet daf&uuml;r neu. Verbinde dich danach wieder mit " SYSOPTV_AP_NAME "."),
+              String(F("SysopTV sucht neu und startet daf&uuml;r neu. Verbinde dich danach wieder mit ")) + apName() + F("."),
               false, F("/"), F("Zur Einrichtung"));
   scheduleRestart(2000);
 }
@@ -912,6 +945,8 @@ static void handleUsage() {
     return;
   }
   usageApply(packet);
+  // Usage data instead of pictures: the cube draws its own designs again.
+  frameModeEnd();
   server.send(200, F("application/json"), F("{\"ok\":true}"));
 }
 
@@ -936,8 +971,13 @@ static void handleInfo() {
   doc["heap"] = ESP.getFreeHeap();
   doc["rescue"] = rescueMode;
 
-  doc["hostname"] = SYSOPTV_HOSTNAME ".local";
-  doc["ssid"] = setupMode ? String(F(SYSOPTV_AP_NAME " (Hotspot)")) : WiFi.SSID();
+  doc["hostname"] = mdnsName();
+  doc["deviceName"] = settingsGet().deviceName;
+  JsonArray caps = doc["capabilities"].to<JsonArray>();
+  caps.add("usage");
+  caps.add("settings");
+  caps.add("frame");
+  doc["ssid"] = setupMode ? apName() + F(" (Hotspot)") : WiFi.SSID();
   doc["signalText"] = signalText();
   doc["timeSynced"] = usageTimeSource() != TIME_NONE;
   doc["timeText"] = timeText();
@@ -963,6 +1003,211 @@ static void handleInfo() {
   server.send(200, F("application/json; charset=utf-8"), out);
 }
 
+// ---------------------------------------------------------------------------
+// /api/settings for the Windows program
+// ---------------------------------------------------------------------------
+
+static void settingsJson(JsonDocument& doc) {
+  const Settings& s = settingsGet();
+  doc["design"] = s.design;
+  JsonArray names = doc["designNames"].to<JsonArray>();
+  for (int i = 0; i < DESIGN_COUNT; i++) {
+    names.add(designGet(i).name);
+  }
+  doc["cycleSeconds"] = s.cycleSeconds;
+  doc["showUsed"] = s.showUsed != 0;
+  doc["brightness"] = s.brightness;
+  JsonObject n = doc["night"].to<JsonObject>();
+  n["enabled"] = s.nightEnabled != 0;
+  n["from"] = minutesText(s.nightFrom);
+  n["to"] = minutesText(s.nightTo);
+  n["brightness"] = s.nightBrightness;
+  doc["deviceName"] = (const char*)s.deviceName;
+  doc["apiKeySet"] = authHasApiKey();
+}
+
+static void sendSettingsJson() {
+  JsonDocument doc;
+  settingsJson(doc);
+  String out;
+  serializeJson(doc, out);
+  server.send(200, F("application/json; charset=utf-8"), out);
+}
+
+// Basic Auth like the HTML pages, but the answer is JSON.
+static bool apiAuth() {
+  if (loggedIn()) {
+    return true;
+  }
+  server.sendHeader(F("WWW-Authenticate"), F("Basic realm=\"SysopTV\""));
+  sendJsonError(401, "Anmeldung erforderlich");
+  return false;
+}
+
+static void handleApiSettingsGet() {
+  if (rescueMode) {
+    sendJsonError(503, "Rettungsmodus");
+    return;
+  }
+  if (apiAuth()) {
+    sendSettingsJson();
+  }
+}
+
+// Reads an optional whole number. Missing is fine, any other type is an error.
+static bool readNumber(JsonVariantConst v, long lo, long hi, long& out) {
+  if (v.isNull()) {
+    return true;
+  }
+  if (!v.is<long>()) {
+    return false;
+  }
+  out = constrain(v.as<long>(), lo, hi);
+  return true;
+}
+
+static bool readFlag(JsonVariantConst v, uint8_t& out) {
+  if (v.isNull()) {
+    return true;
+  }
+  if (!v.is<bool>()) {
+    return false;
+  }
+  out = v.as<bool>() ? 1 : 0;
+  return true;
+}
+
+static bool readTime(JsonVariantConst v, uint16_t& out) {
+  if (v.isNull()) {
+    return true;
+  }
+  return v.is<const char*>() && parseMinutes(String(v.as<const char*>()), out);
+}
+
+// POST /api/settings: every field optional, values checked like on the
+// settings page. Instead of a form token, CSRF is stopped by the required
+// JSON content type and the extra header: a foreign web page cannot send
+// either without a CORS preflight, and the cube never allows one.
+static void handleApiSettingsPost() {
+  if (rescueMode) {
+    sendJsonError(503, "Rettungsmodus");
+    return;
+  }
+  if (!apiAuth()) {
+    return;
+  }
+  if (!server.header("Content-Type").startsWith("application/json") || server.header("X-SysopTV-Client") != "app") {
+    sendJsonError(400, "Content-Type application/json und X-SysopTV-Client: app noetig");
+    return;
+  }
+  const String& body = server.arg("plain");
+  if (body.length() == 0 || body.length() > SYSOPTV_SETTINGS_MAX_BODY) {
+    sendJsonError(400, "kein oder zu grosses JSON");
+    return;
+  }
+  JsonDocument doc;
+  if (deserializeJson(doc, body, DeserializationOption::NestingLimit(3)) || !doc.is<JsonObject>()) {
+    sendJsonError(400, "JSON fehlerhaft");
+    return;
+  }
+  Settings s = settingsGet();
+  String before = s.deviceName;
+  long design = s.design, cycle = s.cycleSeconds, bright = s.brightness, nbright = s.nightBrightness;
+  JsonVariantConst night = doc["night"];
+  if (!night.isNull() && !night.is<JsonObjectConst>()) {
+    sendJsonError(400, "night ungueltig");
+    return;
+  }
+  bool ok = readNumber(doc["design"], 0, 255, design) && readNumber(doc["cycleSeconds"], 0, 255, cycle) &&
+            readFlag(doc["showUsed"], s.showUsed) && readNumber(doc["brightness"], 0, 255, bright) &&
+            readFlag(night["enabled"], s.nightEnabled) && readTime(night["from"], s.nightFrom) &&
+            readTime(night["to"], s.nightTo) && readNumber(night["brightness"], 0, 255, nbright);
+  if (!ok) {
+    sendJsonError(400, "Wert mit falschem Typ oder Format");
+    return;
+  }
+  JsonVariantConst name = doc["deviceName"];
+  if (!name.isNull()) {
+    if (!name.is<const char*>() || !settingsNameValid(name.as<const char*>())) {
+      sendJsonError(400, "deviceName ungueltig");
+      return;
+    }
+    snprintf(s.deviceName, sizeof(s.deviceName), "%s", name.as<const char*>());
+  }
+  s.design = (uint8_t)design;
+  s.cycleSeconds = (uint8_t)cycle;
+  s.brightness = (uint8_t)bright;
+  s.nightBrightness = (uint8_t)nbright;
+  if (!settingsUpdate(s)) {
+    sendJsonError(500, "Speichern im Flash fehlgeschlagen");
+    return;
+  }
+  applyNameChange(before);
+  sendSettingsJson();
+}
+
+// No CORS: OPTIONS gets an answer without any Access-Control header.
+static void handleApiOptions() {
+  server.send(405, F("text/plain"), F("Nicht erlaubt"));
+}
+
+// ---------------------------------------------------------------------------
+// /api/frame: picture mode
+// ---------------------------------------------------------------------------
+
+// The picture comes as the only file of a multipart/form-data upload. The
+// web server hands it over in pieces of 2 KB, which go straight to the
+// decoder in frame.cpp, so the picture is never held in memory.
+static bool frameUploadSeen = false;
+static int frameDenied = 0;
+static const char* frameFailure = nullptr;
+
+static void handleFrameUpload() {
+  HTTPUpload& up = server.upload();
+  if (up.status == UPLOAD_FILE_START) {
+    frameUploadSeen = true;
+    frameFailure = nullptr;
+    frameDenied = 0;
+    if (rescueMode) {
+      frameDenied = 503;
+    } else if (!authApiKeyValid(server.header("X-SysopTV-Key"))) {
+      frameDenied = 401;
+    } else {
+      frameStart();
+    }
+  } else if (frameDenied || frameFailure) {
+    // Ignore the rest of a refused or broken picture.
+  } else if (up.status == UPLOAD_FILE_WRITE) {
+    if (!frameFeed(up.buf, up.currentSize)) {
+      frameFailure = frameError();
+    }
+  } else if (up.status == UPLOAD_FILE_END) {
+    if (!frameFinish()) {
+      frameFailure = frameError();
+    }
+  } else if (up.status == UPLOAD_FILE_ABORTED) {
+    frameFailure = "Upload abgebrochen";
+  }
+}
+
+static void handleFrameDone() {
+  bool seen = frameUploadSeen;
+  frameUploadSeen = false;
+  if (rescueMode || frameDenied == 503) {
+    sendJsonError(503, "Rettungsmodus");
+  } else if (frameDenied == 401 || !authApiKeyValid(server.header("X-SysopTV-Key"))) {
+    sendJsonError(401, "Schluessel fehlt oder falsch");
+  } else if (!seen) {
+    sendJsonError(400, "Bild als multipart/form-data erwartet");
+  } else if (frameFailure) {
+    sendJsonError(400, frameFailure);
+  } else {
+    server.send(200, F("application/json"), F("{\"ok\":true}"));
+  }
+  frameDenied = 0;
+  frameFailure = nullptr;
+}
+
 static void handleNotFound() {
   if (setupMode) {
     // Captive portal: send every unknown address to the setup page.
@@ -979,12 +1224,12 @@ static void handleNotFound() {
 
 static void drawCurrentScreen() {
   if (setupMode) {
-    screenSetup(SYSOPTV_AP_NAME);
+    screenSetup(apName().c_str());
   } else if (WiFi.status() == WL_CONNECTED) {
     // Once usage data has arrived, the design owns the screen and redraws
     // itself as soon as netScreenFree() is true again.
     if (rescueMode || !usageScreenActive()) {
-      screenReady(WiFi.localIP().toString(), rescueMode);
+      screenReady(WiFi.localIP().toString(), mdnsName(), rescueMode);
     }
   } else {
     screenLost();
@@ -1017,23 +1262,35 @@ static void startSetupHotspot() {
   WiFi.mode(WIFI_STA);
   scanNetworks();
   WiFi.mode(WIFI_AP);
-  WiFi.softAP(SYSOPTV_AP_NAME);
+  WiFi.softAP(apName().c_str());
   dns.start(53, "*", WiFi.softAPIP());
   setupMode = true;
   apLastClient = millis();
-  screenSetup(SYSOPTV_AP_NAME);
+  screenSetup(apName().c_str());
 }
 
 static void startStation() {
   setupMode = false;
   wasConnected = true;
-  MDNS.begin(SYSOPTV_HOSTNAME);
+  MDNS.begin(settingsGet().deviceName);
   MDNS.addService("http", "tcp", 80);
   if (!rescueMode) {
     // Fallback clock when the PC is off. The sender time has priority, see usage.cpp.
     configTime(SYSOPTV_TZ, SYSOPTV_NTP_SERVER);
   }
-  screenReady(WiFi.localIP().toString(), rescueMode);
+  screenReady(WiFi.localIP().toString(), mdnsName(), rescueMode);
+}
+
+// A new device name takes effect at once for mDNS, for DHCP with the next lease.
+static void applyNameChange(const String& before) {
+  const char* name = settingsGet().deviceName;
+  if (before == name) {
+    return;
+  }
+  WiFi.hostname(name);
+  if (!setupMode && wasConnected) {
+    MDNS.setHostname(name);
+  }
 }
 
 void netBegin(bool rescue) {
@@ -1042,7 +1299,7 @@ void netBegin(bool rescue) {
   // Mode changes are not written to flash. Credentials are only saved in handleSave().
   WiFi.persistent(false);
   WiFi.mode(WIFI_STA);
-  WiFi.hostname(SYSOPTV_HOSTNAME);
+  WiFi.hostname(settingsGet().deviceName);
   WiFi.setAutoReconnect(true);
 
   String saved = WiFi.SSID();
@@ -1069,7 +1326,7 @@ void netBegin(bool rescue) {
   }
 
   // Authorization is always collected by the web server, the API key header is extra.
-  server.collectHeaders("X-SysopTV-Key");
+  server.collectHeaders("X-SysopTV-Key", "X-SysopTV-Client", "Content-Type");
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/password", HTTP_POST, handlePassword);
@@ -1083,6 +1340,11 @@ void netBegin(bool rescue) {
   server.on("/flashbackup", HTTP_GET, handleFlashBackup);
   server.on("/api/usage", HTTP_POST, handleUsage);
   server.on("/api/info", HTTP_GET, handleInfo);
+  server.on("/api/settings", HTTP_GET, handleApiSettingsGet);
+  server.on("/api/settings", HTTP_POST, handleApiSettingsPost);
+  server.on("/api/settings", HTTP_OPTIONS, handleApiOptions);
+  server.on("/api/frame", HTTP_POST, handleFrameDone, handleFrameUpload);
+  server.on("/api/frame", HTTP_OPTIONS, handleApiOptions);
   server.onNotFound(handleNotFound);
   server.begin();
 }

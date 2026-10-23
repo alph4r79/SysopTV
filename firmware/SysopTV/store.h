@@ -8,6 +8,7 @@
 //
 // Layout of the sector:
 //   0 to 2047      one record with settings and login data, with CRC32
+//                  (version 2 since 0.4.0, version 1 records are taken over)
 //   2048 to 4095   boot log for the password reset, see storeBootBegin()
 
 #pragma once
@@ -23,6 +24,7 @@ struct StoredSettings {
   uint8_t nightBrightness;  // 0 to 100 percent, 0 switches the display off
   uint16_t nightFrom;       // minutes after midnight
   uint16_t nightTo;
+  char deviceName[25];      // mDNS name without ".local", empty means default
 };
 
 struct StoredAuth {

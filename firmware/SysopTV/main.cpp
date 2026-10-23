@@ -14,6 +14,7 @@
 #include "usage.h"
 #include "settings.h"
 #include "design.h"
+#include "frame.h"
 #include "auth.h"
 #include "store.h"
 
@@ -91,7 +92,8 @@ static void updateView() {
   static uint8_t shownDesign = 0xFF;
   uint8_t id = designUpdate();
   const Design& design = designGet(id);
-  if (!netScreenFree() || !usageScreenActive()) {
+  // In picture mode the PC draws, the designs stay off until it times out.
+  if (!netScreenFree() || !usageScreenActive() || frameModeActive()) {
     viewOnScreen = false;
     return;
   }

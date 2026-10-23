@@ -13,12 +13,12 @@
 extern "C" uint32_t _EEPROM_start;
 
 static const uint32_t SECTOR_SIZE = 4096;
-static const uint32_t RECORD_SIZE = 128;  // multiple of 4, room for later fields
+static const uint32_t RECORD_SIZE = 192;  // multiple of 4, room for later fields
 static const uint32_t LOG_OFFSET = 2048;
 static const uint32_t LOG_WORDS = (SECTOR_SIZE - LOG_OFFSET) / 4;
 
 static const uint32_t RECORD_MAGIC = 0x53545953;  // "SYTS"
-static const uint16_t RECORD_VERSION = 1;
+static const uint16_t RECORD_VERSION = 2;
 
 static const uint32_t LOG_FREE = 0xFFFFFFFFUL;
 static const uint32_t LOG_BOOT = 0x0B0B0B0BUL;
@@ -32,6 +32,28 @@ struct Record {
   StoredAuth auth;
 };
 static_assert(sizeof(Record) + 4 <= RECORD_SIZE, "record too large");
+
+// Record of 0.3.x: 128 bytes, settings without device name. Read once and
+// written back as version 2 with the next save, so password and settings
+// survive the update.
+static const uint32_t RECORD_V1_SIZE = 128;
+struct SettingsV1 {
+  uint8_t design;
+  uint8_t cycleSeconds;
+  uint8_t showUsed;
+  uint8_t brightness;
+  uint8_t nightEnabled;
+  uint8_t nightBrightness;
+  uint16_t nightFrom;
+  uint16_t nightTo;
+};
+struct RecordV1 {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t length;
+  SettingsV1 settings;
+  StoredAuth auth;
+};
 
 static bool bootCounted = false;
 static uint32_t nextLogWord = 0;
@@ -71,11 +93,15 @@ static bool readRecord(uint32_t* buf) {
   return ESP.flashRead(sectorAddress(), buf, RECORD_SIZE);
 }
 
-static bool recordValid(const uint32_t* buf) {
+static bool crcOk(const uint32_t* buf, uint32_t size) {
   const uint8_t* bytes = reinterpret_cast<const uint8_t*>(buf);
   uint32_t crc;
-  memcpy(&crc, bytes + RECORD_SIZE - 4, 4);
-  if (crc != crc32(bytes, RECORD_SIZE - 4)) {
+  memcpy(&crc, bytes + size - 4, 4);
+  return crc == crc32(bytes, size - 4);
+}
+
+static bool recordValid(const uint32_t* buf) {
+  if (!crcOk(buf, RECORD_SIZE)) {
     return false;
   }
   Record r;
@@ -83,15 +109,42 @@ static bool recordValid(const uint32_t* buf) {
   return r.magic == RECORD_MAGIC && r.version == RECORD_VERSION && r.length == sizeof(Record);
 }
 
-bool storeLoad(StoredSettings& settings, StoredAuth& auth) {
-  uint32_t buf[RECORD_SIZE / 4];
-  if (!readRecord(buf) || !recordValid(buf)) {
+static bool recordV1Valid(const uint32_t* buf) {
+  if (!crcOk(buf, RECORD_V1_SIZE)) {
     return false;
   }
-  Record r;
+  RecordV1 r;
   memcpy(&r, buf, sizeof(r));
-  settings = r.settings;
-  auth = r.auth;
+  return r.magic == RECORD_MAGIC && r.version == 1 && r.length == sizeof(RecordV1);
+}
+
+bool storeLoad(StoredSettings& settings, StoredAuth& auth) {
+  uint32_t buf[RECORD_SIZE / 4];
+  if (!readRecord(buf)) {
+    return false;
+  }
+  if (recordValid(buf)) {
+    Record r;
+    memcpy(&r, buf, sizeof(r));
+    settings = r.settings;
+    auth = r.auth;
+  } else if (recordV1Valid(buf)) {
+    RecordV1 r;
+    memcpy(&r, buf, sizeof(r));
+    memset(&settings, 0, sizeof(settings));
+    settings.design = r.settings.design;
+    settings.cycleSeconds = r.settings.cycleSeconds;
+    settings.showUsed = r.settings.showUsed;
+    settings.brightness = r.settings.brightness;
+    settings.nightEnabled = r.settings.nightEnabled;
+    settings.nightBrightness = r.settings.nightBrightness;
+    settings.nightFrom = r.settings.nightFrom;
+    settings.nightTo = r.settings.nightTo;
+    auth = r.auth;
+  } else {
+    return false;
+  }
+  settings.deviceName[sizeof(settings.deviceName) - 1] = '\0';
   auth.apiKey[sizeof(auth.apiKey) - 1] = '\0';
   return true;
 }
@@ -160,7 +213,7 @@ uint8_t storeBootBegin(bool countThisBoot) {
       // holds old data from before SysopTV. Rewrite it with the record (if it
       // is valid) and the current series of short boots.
       uint32_t record[RECORD_SIZE / 4];
-      bool haveRecord = readRecord(record) && recordValid(record);
+      bool haveRecord = readRecord(record) && (recordValid(record) || recordV1Valid(record));
       ESP.flashEraseSector(sectorAddress() / SECTOR_SIZE);
       nextLogWord = 0;
       if (haveRecord) {
