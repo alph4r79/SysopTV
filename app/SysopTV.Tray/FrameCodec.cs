@@ -130,6 +130,174 @@ namespace SysopTV.Tray
             return p == data.Length ? null : "Daten nach dem letzten Pixel";
         }
 
+        // Bytes one more request costs besides the picture data: HTTP header and
+        // multipart frame, measured roughly with the requests of the program.
+        internal const int RequestOverhead = 300;
+        internal const int MaxAreas = 4;
+        private const int Tile = 8;
+
+        // Bytes for sending these parts, one request per part.
+        internal static int Cost(Canvas canvas, Rectangle r)
+        {
+            return Encode(canvas, r).Length + RequestOverhead;
+        }
+
+        // Up to four separate parts that together cover every changed pixel.
+        // Parts are joined when one request for both is smaller than two.
+        // Empty list if nothing changed.
+        internal static List<Rectangle> ChangedAreas(Canvas before, Canvas after)
+        {
+            var result = new List<Rectangle>();
+            Rectangle all = ChangedArea(before, after);
+            if (all.IsEmpty)
+            {
+                return result;
+            }
+
+            // Changed tiles of 8 x 8 pixels, grouped into touching groups.
+            const int n = Canvas.Size / Tile;
+            var dirty = new bool[n, n];
+            for (int y = all.Top; y < all.Bottom; y++)
+            {
+                for (int x = all.Left; x < all.Right; x++)
+                {
+                    int i = y * Canvas.Size + x;
+                    if (before.Pixels[i] != after.Pixels[i])
+                    {
+                        dirty[y / Tile, x / Tile] = true;
+                    }
+                }
+            }
+            var seen = new bool[n, n];
+            var stack = new Stack<Point>();
+            for (int ty = 0; ty < n; ty++)
+            {
+                for (int tx = 0; tx < n; tx++)
+                {
+                    if (!dirty[ty, tx] || seen[ty, tx])
+                    {
+                        continue;
+                    }
+                    Rectangle box = Rectangle.Empty;
+                    stack.Push(new Point(tx, ty));
+                    seen[ty, tx] = true;
+                    while (stack.Count > 0)
+                    {
+                        Point t = stack.Pop();
+                        Rectangle exact = Exact(before, after, new Rectangle(t.X * Tile, t.Y * Tile, Tile, Tile));
+                        box = box.IsEmpty ? exact : Rectangle.Union(box, exact);
+                        for (int dy = -1; dy <= 1; dy++)
+                        {
+                            for (int dx = -1; dx <= 1; dx++)
+                            {
+                                int nx = t.X + dx, ny = t.Y + dy;
+                                if (nx >= 0 && ny >= 0 && nx < n && ny < n && dirty[ny, nx] && !seen[ny, nx])
+                                {
+                                    seen[ny, nx] = true;
+                                    stack.Push(new Point(nx, ny));
+                                }
+                            }
+                        }
+                    }
+                    result.Add(box);
+                }
+            }
+
+            // Many groups: first join by the smallest growth in area, that is cheap to compute.
+            while (result.Count > 12)
+            {
+                JoinBest(result, (a, b) => Area(Rectangle.Union(a, b)) - Area(a) - Area(b));
+            }
+            // Then by bytes, down to four parts.
+            var costs = new Dictionary<Rectangle, int>();
+            Func<Rectangle, int> cost = r =>
+            {
+                int c;
+                if (!costs.TryGetValue(r, out c))
+                {
+                    c = Cost(after, r);
+                    costs[r] = c;
+                }
+                return c;
+            };
+            while (result.Count > MaxAreas)
+            {
+                JoinBest(result, (a, b) => cost(Rectangle.Union(a, b)) - cost(a) - cost(b));
+            }
+            // And as long as joining saves bytes.
+            while (result.Count > 1)
+            {
+                int bi, bj;
+                int gain = Best(result, (a, b) => cost(Rectangle.Union(a, b)) - cost(a) - cost(b), out bi, out bj);
+                if (gain >= 0)
+                {
+                    break;
+                }
+                Join(result, bi, bj);
+            }
+            return result;
+        }
+
+        private static int Area(Rectangle r)
+        {
+            return r.Width * r.Height;
+        }
+
+        private static int Best(List<Rectangle> list, Func<Rectangle, Rectangle, int> price, out int bi, out int bj)
+        {
+            int best = int.MaxValue;
+            bi = 0;
+            bj = 1;
+            for (int i = 0; i < list.Count; i++)
+            {
+                for (int j = i + 1; j < list.Count; j++)
+                {
+                    int p = price(list[i], list[j]);
+                    if (p < best)
+                    {
+                        best = p;
+                        bi = i;
+                        bj = j;
+                    }
+                }
+            }
+            return best;
+        }
+
+        private static void JoinBest(List<Rectangle> list, Func<Rectangle, Rectangle, int> price)
+        {
+            int bi, bj;
+            Best(list, price, out bi, out bj);
+            Join(list, bi, bj);
+        }
+
+        private static void Join(List<Rectangle> list, int i, int j)
+        {
+            list[i] = Rectangle.Union(list[i], list[j]);
+            list.RemoveAt(j);
+        }
+
+        // Smallest rectangle around the changed pixels inside one tile.
+        private static Rectangle Exact(Canvas before, Canvas after, Rectangle tile)
+        {
+            int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+            for (int y = tile.Top; y < tile.Bottom; y++)
+            {
+                for (int x = tile.Left; x < tile.Right; x++)
+                {
+                    int i = y * Canvas.Size + x;
+                    if (before.Pixels[i] != after.Pixels[i])
+                    {
+                        minX = Math.Min(minX, x);
+                        maxX = Math.Max(maxX, x);
+                        minY = Math.Min(minY, y);
+                        maxY = Math.Max(maxY, y);
+                    }
+                }
+            }
+            return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
+        }
+
         // Smallest rectangle around all pixels that differ, or Empty if none do.
         internal static Rectangle ChangedArea(Canvas before, Canvas after)
         {

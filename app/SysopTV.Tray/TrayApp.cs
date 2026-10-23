@@ -20,7 +20,7 @@ namespace SysopTV.Tray
         private readonly SenderService service;
         private readonly RegisteredWaitHandle showWait;
         private AppConfig config;
-        private SettingsForm settingsForm;
+        private MainForm mainForm;
         private Icon currentIcon;
         private string lastCategory = "none";
 
@@ -39,7 +39,7 @@ namespace SysopTV.Tray
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Jetzt senden", null, (s, e) => service.SendNow());
             menu.Items.Add("Würfel im Browser öffnen", null, (s, e) => OpenCube(""));
-            menu.Items.Add("Einstellungen", null, (s, e) => ShowSettings());
+            menu.Items.Add("Fenster öffnen", null, (s, e) => ShowWindow());
             menu.Items.Add("Log öffnen", null, (s, e) => OpenLog());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Beenden", null, (s, e) => ExitThread());
@@ -52,11 +52,11 @@ namespace SysopTV.Tray
                 ContextMenuStrip = menu,
                 Visible = true
             };
-            notify.DoubleClick += (s, e) => ShowSettings();
+            notify.DoubleClick += (s, e) => ShowWindow();
 
             // A second start of the program sets this event.
             showWait = ThreadPool.RegisterWaitForSingleObject(showEvent,
-                (state, timedOut) => invoker.BeginInvoke((Action)ShowSettings), null, Timeout.Infinite, false);
+                (state, timedOut) => invoker.BeginInvoke((Action)ShowWindow), null, Timeout.Infinite, false);
 
             service.Start();
 
@@ -118,22 +118,24 @@ namespace SysopTV.Tray
             }
         }
 
-        internal void ShowSettings()
+        internal void ShowWindow()
         {
-            if (settingsForm != null && !settingsForm.IsDisposed)
+            if (mainForm != null && !mainForm.IsDisposed)
             {
-                settingsForm.WindowState = FormWindowState.Normal;
-                settingsForm.Activate();
+                if (mainForm.WindowState == FormWindowState.Minimized)
+                {
+                    mainForm.WindowState = FormWindowState.Normal;
+                }
+                mainForm.Activate();
                 return;
             }
-            settingsForm = new SettingsForm(config, service);
-            settingsForm.Saved += cfg =>
+            mainForm = new MainForm(config, service, cfg =>
             {
                 config = cfg;
                 service.ApplyConfig(cfg);
-            };
-            settingsForm.Show();
-            settingsForm.Activate();
+            });
+            mainForm.Show();
+            mainForm.Activate();
         }
 
         private void OpenCube(string path)
@@ -213,9 +215,9 @@ namespace SysopTV.Tray
             {
                 currentIcon.Dispose();
             }
-            if (settingsForm != null && !settingsForm.IsDisposed)
+            if (mainForm != null && !mainForm.IsDisposed)
             {
-                settingsForm.Close();
+                mainForm.Close();
             }
             invoker.Dispose();
             Log.Write("Beendet");

@@ -4,7 +4,7 @@
 #pragma once
 #include <stdint.h>
 
-#define SYSOPTV_VERSION "0.4.0"
+#define SYSOPTV_VERSION "0.4.1"
 // Default device name and hotspot name get the last 4 hex digits of the chip
 // ID appended, so several cubes in one network have different names.
 #define SYSOPTV_NAME_PREFIX "sysoptv-"

@@ -7,6 +7,8 @@
 //
 // Version 0.1.0 had one cube (deviceAddress, apiKeyProtected). Such a file is
 // taken over as one cube with the function "usage".
+// Files of version 0.2.0 are read as they are; design, showUsed and
+// cycleSeconds of each cube then get their defaults.
 
 using System;
 using System.Collections.Generic;
@@ -78,6 +80,14 @@ namespace SysopTV.Tray
         [DataMember(Name = "apiKeyProtected")] public string ApiKeyProtected = "";
         [DataMember(Name = "adminPasswordProtected")] public string AdminPasswordProtected = "";
 
+        // For the pictures only (functions "claude" and "shop"), chosen in the program.
+        // Older files have none of these, OnDeserializing sets the defaults.
+        [DataMember(Name = "design")] public string Design = "";
+        [DataMember(Name = "showUsed")] public bool ShowUsed = true;
+        [DataMember(Name = "cycleSeconds")] public int CycleSeconds;
+
+        internal static readonly int[] CycleChoices = { 0, 30, 60 };
+
         internal string ApiKey
         {
             get { return Secret.Unprotect(ApiKeyProtected); }
@@ -95,9 +105,63 @@ namespace SysopTV.Tray
             get { return string.IsNullOrEmpty(Name) ? Address : Name + " (" + Address + ")"; }
         }
 
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Design = "";
+            ShowUsed = true;
+            CycleSeconds = 0;
+        }
+
+        // The designs to choose from for the function of this cube, null for "usage".
+        internal DesignInfo[] Designs
+        {
+            get
+            {
+                if (Function == CubeFunction.ClaudeFrame)
+                {
+                    return ClaudeDesigns.All;
+                }
+                return Function == CubeFunction.ShopFrame ? ShopDesigns.All : null;
+            }
+        }
+
+        // The chosen design, or the default if it does not fit the function.
+        internal string DesignOrDefault
+        {
+            get
+            {
+                if (Function == CubeFunction.ClaudeFrame)
+                {
+                    return ClaudeDesigns.Known(Design) ? Design : ClaudeDesigns.Default;
+                }
+                return ShopDesigns.Known(Design) ? Design : ShopDesigns.Default;
+            }
+        }
+
+        // The design to show now: with automatic change one after the other,
+        // starting with the chosen one, the same on every PC clock tick.
+        internal string DesignAt(DateTime now)
+        {
+            DesignInfo[] list = Designs;
+            string chosen = DesignOrDefault;
+            if (list == null || CycleSeconds <= 0)
+            {
+                return chosen;
+            }
+            int start = Array.FindIndex(list, d => d.Id == chosen);
+            long step = new DateTimeOffset(now).ToUnixTimeSeconds() / CycleSeconds;
+            return list[(int)((start + step) % list.Length)].Id;
+        }
+
         [OnDeserialized]
         private void OnDeserialized(StreamingContext context)
         {
+            Design = Design ?? "";
+            if (Array.IndexOf(CycleChoices, CycleSeconds) < 0)
+            {
+                CycleSeconds = 0;
+            }
             Address = (Address ?? "").Trim();
             Name = Name ?? "";
             if (Function != CubeFunction.ClaudeFrame && Function != CubeFunction.ShopFrame)
@@ -211,12 +275,18 @@ namespace SysopTV.Tray
 
         internal static AppConfig Load()
         {
+            return Load(AppPaths.ConfigFile);
+        }
+
+        // With a path for the offline tests, which must not touch the real file.
+        internal static AppConfig Load(string path)
+        {
             AppConfig cfg = null;
             try
             {
-                if (File.Exists(AppPaths.ConfigFile))
+                if (File.Exists(path))
                 {
-                    using (FileStream fs = File.OpenRead(AppPaths.ConfigFile))
+                    using (FileStream fs = File.OpenRead(path))
                     {
                         cfg = (AppConfig)new DataContractJsonSerializer(typeof(AppConfig)).ReadObject(fs);
                     }
@@ -259,19 +329,24 @@ namespace SysopTV.Tray
 
         internal void Save()
         {
-            Directory.CreateDirectory(AppPaths.ConfigDir);
-            string tmp = AppPaths.ConfigFile + ".tmp";
+            Save(AppPaths.ConfigFile);
+        }
+
+        internal void Save(string path)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            string tmp = path + ".tmp";
             using (FileStream fs = File.Create(tmp))
             {
                 new DataContractJsonSerializer(typeof(AppConfig)).WriteObject(fs, this);
             }
-            if (File.Exists(AppPaths.ConfigFile))
+            if (File.Exists(path))
             {
-                File.Replace(tmp, AppPaths.ConfigFile, null);
+                File.Replace(tmp, path, null);
             }
             else
             {
-                File.Move(tmp, AppPaths.ConfigFile);
+                File.Move(tmp, path);
             }
         }
     }

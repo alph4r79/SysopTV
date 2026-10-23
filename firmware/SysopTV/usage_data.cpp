@@ -199,6 +199,7 @@ void usageFormatWeekReset(int64_t nowLocal, int64_t resetLocal, char* out, size_
 
 static void makeColumn(const UsageLimit& limit, bool isSession, const UsageInput& in, UsageColumn& col) {
   col.present = limit.present;
+  col.bottomPlain = true;
   col.resetClock[0] = '\0';
   if (!limit.present) {
     col.warn = false;
@@ -219,13 +220,25 @@ static void makeColumn(const UsageLimit& limit, bool isSession, const UsageInput
   if (limit.resetsAt != 0) {
     usageFormatClock(reset + in.tz, col.resetClock, sizeof(col.resetClock));
   }
-  if (limit.resetsAt == 0 || !in.clockValid) {
+  if (limit.resetsAt == 0 && isSession) {
+    // Anthropic sends no reset time while no session is running.
+    snprintf(col.bottom, sizeof(col.bottom), "nicht aktiv");
+  } else if (limit.resetsAt == 0 || !in.clockValid) {
     snprintf(col.bottom, sizeof(col.bottom), isSession ? "noch -:--" : "--");
   } else if (isSession) {
     // Counted to the rounded reset, so clock plus countdown gives the reset time.
     usageFormatCountdown(reset - in.nowUtc, col.bottom, sizeof(col.bottom));
   } else {
     usageFormatWeekReset(in.nowUtc + in.tz, reset + in.tz, col.bottom, sizeof(col.bottom));
+  }
+  col.bottomPlain = limit.resetsAt == 0 || !in.clockValid || strncmp(col.bottom, "Reset", 5) == 0;
+}
+
+void usageResetLine(const UsageColumn& col, char* out, size_t size) {
+  if (col.bottomPlain) {
+    snprintf(out, size, "%s", col.bottom);
+  } else {
+    snprintf(out, size, "Reset %s", col.bottom);
   }
 }
 

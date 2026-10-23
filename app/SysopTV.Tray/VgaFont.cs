@@ -1,13 +1,13 @@
 // This file is NOT under the GPL of SysopTV.
 //
-// Font: "Px437 IBM VGA 8x16" and, for the euro sign and O with stroke,
+// Font: "Px437 IBM VGA 8x16" and, for the euro sign,
 // "PxPlus IBM VGA 8x16" from The Ultimate Oldschool PC Font Pack,
 // Copyright (C) VileR, https://int10h.org/oldschool-pc-fonts/
 // License: Creative Commons Attribution-ShareAlike 4.0 International
 // (CC BY-SA 4.0), https://creativecommons.org/licenses/by-sa/4.0/
 //
 // Converted to an 8x16 bitmap for SysopTV by Christoph Scheel in 2026, the
-// same glyphs as firmware/SysopTV/font_vga.h plus two more. The converted
+// same glyphs as firmware/SysopTV/font_vga.h plus the euro sign. The converted
 // bitmap in this file is shared under the same license, CC BY-SA 4.0.
 
 namespace SysopTV.Tray
@@ -15,7 +15,7 @@ namespace SysopTV.Tray
     internal static class VgaFont
     {
         // Glyphs 0 to 94 are ASCII 32 to 126, then the characters in Extra.
-        internal static readonly char[] Extra = { '\u00E4', '\u00F6', '\u00FC', '\u00C4', '\u00D6', '\u00DC', '\u00DF', '\u00B0', '\u20AC', '\u00D8' };
+        internal static readonly char[] Extra = { '\u00E4', '\u00F6', '\u00FC', '\u00C4', '\u00D6', '\u00DC', '\u00DF', '\u00B0', '\u20AC' };
 
         // One byte per row, most significant bit is the left pixel.
         internal static readonly byte[][] Glyphs =
@@ -124,7 +124,6 @@ namespace SysopTV.Tray
             new byte[] {0x00, 0x00, 0x78, 0xCC, 0xCC, 0xCC, 0xD8, 0xCC, 0xC6, 0xC6, 0xC6, 0xCC, 0x00, 0x00, 0x00, 0x00},  // U+00DF
             new byte[] {0x00, 0x38, 0x6C, 0x6C, 0x38, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},  // U+00B0
             new byte[] {0x00, 0x00, 0x00, 0x1C, 0x36, 0x60, 0xFC, 0x60, 0xF8, 0x60, 0x36, 0x1C, 0x00, 0x00, 0x00, 0x00},  // U+20AC
-            new byte[] {0x00, 0x04, 0x7C, 0xCE, 0xCE, 0xD6, 0xD6, 0xD6, 0xD6, 0xE6, 0xE6, 0x7C, 0x40, 0x00, 0x00, 0x00},  // U+00D8
         };
     }
 }

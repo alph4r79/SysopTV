@@ -14,7 +14,6 @@
 #include "config.h"
 #include <TFT_eSPI.h>
 #include <stdio.h>
-#include <string.h>
 
 static const uint16_t BACK = SYSOPTV_BLACK;
 static const uint16_t MAIN = AMBER_MAIN;
@@ -200,13 +199,7 @@ static void drawLimits(const UsageView& view) {
   drawSegments(w.percent, w.present, w.warn);
 
   char bottom[24];
-  if (!w.present) {
-    snprintf(bottom, sizeof(bottom), "%s", w.bottom);
-  } else if (strncmp(w.bottom, "Reset", 5) == 0) {
-    snprintf(bottom, sizeof(bottom), "%s", w.bottom);
-  } else {
-    snprintf(bottom, sizeof(bottom), "Reset %s", w.bottom);
-  }
+  usageResetLine(w, bottom, sizeof(bottom));
   if (textChanged(bottomLine, sizeof(bottomLine), bottom)) {
     vgaText(bottom, LEFT, BOTTOM_Y, ALIGN_LEFT, 1, DIM, BACK, RIGHT - LEFT);
   }

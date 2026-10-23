@@ -48,7 +48,8 @@ struct UsageColumn {
   uint8_t remaining;  // percent left, 0 to 100
   uint8_t percent;    // the value to show: remaining or used, see UsageInput::showUsed
   uint8_t segments;   // filled segments for percent, 0 to USAGE_SEGMENTS
-  char bottom[16];    // countdown or reset time
+  char bottom[16];    // countdown or reset time, or a plain text like "nicht aktiv"
+  bool bottomPlain;   // bottom is no time, so no "Reset" in front of it
   char resetClock[6]; // local time of the reset "HH:MM", empty if unknown
 };
 
@@ -87,6 +88,10 @@ int64_t usageResetRounded(uint32_t resetsAt);
 
 // Days since 1970-01-01 for a calendar date (proleptic Gregorian).
 int64_t usageDaysFromCivil(int year, int month, int day);
+
+// The bottom text with "Reset " in front, as the overview, ANSI and Klassik
+// show it. Plain texts ("nicht aktiv", "keine Daten", "Reset faellig") stay as they are.
+void usageResetLine(const UsageColumn& col, char* out, size_t size);
 
 // Text helpers, public for the tests.
 void usageFormatClock(int64_t localSeconds, char* out, size_t size);

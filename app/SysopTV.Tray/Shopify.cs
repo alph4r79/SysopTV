@@ -3,7 +3,9 @@
 //
 // Orders and revenue from the Shopify GraphQL Admin API (version 2026-10).
 // Needed access scope: read_orders. Without read_all_orders Shopify only
-// returns the last 60 days, which is enough for the current month.
+// returns the last 60 days, which is enough for the current month and the
+// last 14 days. Read are only number, time, amount and fulfillment state of
+// each order, never customer names, addresses or e-mail addresses.
 //
 // Access either with an Admin API access token of an older custom app, or
 // with client ID and secret of an app from the Shopify Dev Dashboard
@@ -47,10 +49,16 @@ namespace SysopTV.Tray
                 int offset = Convert.ToInt32(Dict(Dict(shop, "shop"), "timezoneOffsetMinutes")["__value"] ?? 0,
                                              CultureInfo.InvariantCulture);
                 DateTime shopNow = DateTime.UtcNow.AddMinutes(offset);
+                result.ShopNow = shopNow;
                 DateTime today = shopNow.Date;
                 DateTime weekStart = today.AddDays(-6);
+                DateTime daysStart = today.AddDays(-13);
                 DateTime monthStart = new DateTime(today.Year, today.Month, 1);
-                DateTime from = weekStart < monthStart ? weekStart : monthStart;
+                DateTime from = daysStart < monthStart ? daysStart : monthStart;
+                for (int i = 0; i < 14; i++)
+                {
+                    result.Days.Add(new ShopPeriod { Date = daysStart.AddDays(i) });
+                }
                 string sinceUtc = from.AddMinutes(-offset).ToString("yyyy-MM-ddTHH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
                 string filter = "created_at:>='" + sinceUtc + "' AND test:false AND NOT status:cancelled";
@@ -61,7 +69,7 @@ namespace SysopTV.Tray
                     var vars = new Dictionary<string, object> { { "q", filter }, { "after", cursor } };
                     var data = Query(domain, token,
                         "query($q:String!,$after:String){ orders(first:250, after:$after, query:$q, sortKey:CREATED_AT, reverse:true)" +
-                        "{ pageInfo{ hasNextPage endCursor } nodes{ createdAt cancelledAt test totalPriceSet{ shopMoney{ amount } } } } }",
+                        "{ pageInfo{ hasNextPage endCursor } nodes{ name createdAt cancelledAt test displayFulfillmentStatus totalPriceSet{ shopMoney{ amount } } } } }",
                         vars);
                     var orders = Dict(data, "orders");
                     foreach (object o in List(orders, "nodes"))
@@ -80,6 +88,21 @@ namespace SysopTV.Tray
                             result.LastOrderTime = created;
                             result.LastOrderAmount = amount;
                             first = false;
+                        }
+                        if (created.Date == today && result.TodayOrders.Count < ShopData.MaxTodayOrders)
+                        {
+                            result.TodayOrders.Add(new ShopOrder
+                            {
+                                Number = node["name"] as string ?? "",
+                                Time = created,
+                                Amount = amount,
+                                Shipped = "FULFILLED".Equals(node["displayFulfillmentStatus"])
+                            });
+                        }
+                        int day = (created.Date - daysStart).Days;
+                        if (day >= 0 && day < 14)
+                        {
+                            Add(result.Days[day], true, amount);
                         }
                         Add(result.Today, created.Date == today, amount);
                         Add(result.Yesterday, created.Date == today.AddDays(-1), amount);

@@ -90,9 +90,11 @@ namespace SysopTV.Tray
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
         private DateTime blockedUntil = DateTime.MinValue;
 
+        // Taken over from state.json at the start, so a restart does not end the block.
         internal DateTime BlockedUntil
         {
             get { return blockedUntil; }
+            set { blockedUntil = value; }
         }
 
         internal UsageData Query()
@@ -208,6 +210,31 @@ namespace SysopTV.Tray
             }
         }
 
+        // When the login of Claude Code runs out, for the window. Only expiresAt
+        // is used, the token is neither kept nor shown. Null if unknown.
+        internal static DateTime? LoginExpires()
+        {
+            try
+            {
+                if (!File.Exists(AppPaths.CredentialsFile))
+                {
+                    return null;
+                }
+                var root = new JavaScriptSerializer().DeserializeObject(File.ReadAllText(AppPaths.CredentialsFile)) as Dictionary<string, object>;
+                object oauth, exp;
+                if (root == null || !root.TryGetValue("claudeAiOauth", out oauth) || !(oauth is Dictionary<string, object>) ||
+                    !((Dictionary<string, object>)oauth).TryGetValue("expiresAt", out exp) || exp == null)
+                {
+                    return null;
+                }
+                return DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(exp, CultureInfo.InvariantCulture)).LocalDateTime;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         // One limit as the cube expects it, or null if missing.
         private static UsageLimit ToLimit(Dictionary<string, object> u, string key)
         {
@@ -282,6 +309,14 @@ namespace SysopTV.Tray
         private UsageData lastGood;
         private DateTime lastGoodTime;
         private int failCount;
+
+        // The last valid values from state.json, as if they had just been read at that time.
+        internal void Seed(UsageData good, DateTime when)
+        {
+            lastGood = good;
+            lastGoodTime = when;
+            failCount = 0;
+        }
 
         internal UsageData Resolve(UsageData data, DateTime now)
         {

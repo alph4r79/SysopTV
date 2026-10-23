@@ -43,7 +43,7 @@ namespace SysopTV.Tray
             {
                 if (!created)
                 {
-                    // Second start: ask the running instance to open its settings.
+                    // Second start: ask the running instance to open its window.
                     try
                     {
                         using (EventWaitHandle ev = EventWaitHandle.OpenExisting(ShowEventName))

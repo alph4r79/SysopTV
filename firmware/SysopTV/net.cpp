@@ -288,15 +288,11 @@ static String percentText(const UsageColumn& c) {
   return c.present ? String(c.percent) + F(" %") : String(F("--"));
 }
 
-// Reset like on the display, with "Reset" in front.
+// Reset like on the display, with "Reset" in front (usageResetLine).
 static String resetText(const UsageColumn& c) {
-  if (!c.present) {
-    return String(c.bottom);
-  }
-  if (strncmp(c.bottom, "Reset", 5) == 0) {
-    return String(c.bottom);
-  }
-  return String(F("Reset ")) + c.bottom;
+  char line[24];
+  usageResetLine(c, line, sizeof(line));
+  return String(line);
 }
 
 static const __FlashStringHelper* modeWord(bool showUsed) {

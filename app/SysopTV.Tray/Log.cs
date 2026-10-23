@@ -18,8 +18,15 @@ namespace SysopTV.Tray
         // In --once mode every line also goes to the console.
         internal static bool Echo;
 
+        // For the offline tests: write nothing, so the log of a running program stays clean.
+        internal static bool Quiet { get; set; }
+
         internal static void Write(string text)
         {
+            if (Quiet)
+            {
+                return;
+            }
             string line = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + text;
             lock (Gate)
             {

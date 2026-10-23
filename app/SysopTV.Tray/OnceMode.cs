@@ -49,8 +49,38 @@ namespace SysopTV.Tray
             CubeEntry cube = cfg.Cubes.Find(c => c.Function == CubeFunction.Usage) ?? cfg.Cubes[0];
             string device = Program.ArgValue(args, "--device") ?? cube.Address;
 
-            var claude = new ClaudeClient();
-            UsageData data = new FailurePolicy().Resolve(claude.Query(), DateTime.Now);
+            // Same rules as the background program: no query inside the interval
+            // after the last one and none during a 429 block, state.json is updated.
+            AppState state = AppState.Load(AppState.DefaultPath);
+            var claude = new ClaudeClient { BlockedUntil = AppState.ToLocal(state.BlockedUntil) ?? DateTime.MinValue };
+            var policy = new FailurePolicy();
+            UsageData stored = state.LastOk();
+            if (stored != null)
+            {
+                policy.Seed(stored, AppState.ToLocal(state.LastOkAt).Value);
+            }
+            DateTime last = AppState.ToLocal(state.LastQuery) ?? DateTime.MinValue;
+            UsageData data;
+            if (!SenderService.QueryDue(DateTime.Now, last, AppConfig.MinInterval, DateTime.MinValue))
+            {
+                Console.WriteLine("Letzte Abfrage um " + last.ToString("HH:mm:ss") + ", Anthropic wird frühestens 120 Sekunden danach wieder gefragt.");
+                data = policy.Resolve(new UsageData { State = "error", Reason = "gespeicherte Werte" }, DateTime.Now);
+            }
+            else
+            {
+                UsageData raw = claude.Query();
+                if (raw.State != "error" || raw.Attempted)
+                {
+                    state.LastQuery = AppState.ToUnix(DateTime.Now);
+                }
+                data = policy.Resolve(raw, DateTime.Now);
+                if (data.State == "ok" && !data.Held)
+                {
+                    state.SetLastOk(data, DateTime.Now);
+                }
+                state.BlockedUntil = claude.BlockedUntil > DateTime.Now ? AppState.ToUnix(claude.BlockedUntil) : 0;
+                state.Save(AppState.DefaultPath);
+            }
             Log.Write("Testlauf, Würfel " + device);
             Log.Write("Daten: " + data.Summary());
             if (data.State == "ok")

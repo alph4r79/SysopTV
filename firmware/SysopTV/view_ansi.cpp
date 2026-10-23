@@ -11,7 +11,6 @@
 #include "config.h"
 #include <TFT_eSPI.h>
 #include <stdio.h>
-#include <string.h>
 
 static const uint16_t BACK = SYSOPTV_BLACK;
 
@@ -121,11 +120,7 @@ static void drawColumn(int index, const UsageColumn& col) {
   }
   if (textChanged(c.bottom, sizeof(c.bottom), col.bottom) || full) {
     char line[24];
-    if (col.present && strncmp(col.bottom, "Reset", 5) != 0) {
-      snprintf(line, sizeof(line), "Reset %s", col.bottom);
-    } else {
-      snprintf(line, sizeof(line), "%s", col.bottom);
-    }
+    usageResetLine(col, line, sizeof(line));
     vgaText(line, 8, y + 72, ALIGN_LEFT, 1, b.dim, BACK, 224);
   }
   c.valid = true;

@@ -89,6 +89,7 @@ begin
       DeleteFile(ExpandConstant('{userappdata}\SysopTV\config.json'));
       DeleteFile(ExpandConstant('{localappdata}\SysopTV\app.log'));
       DeleteFile(ExpandConstant('{localappdata}\SysopTV\app.old.log'));
+      DeleteFile(ExpandConstant('{localappdata}\SysopTV\state.json'));
       RemoveDir(ExpandConstant('{userappdata}\SysopTV'));
       RemoveDir(ExpandConstant('{localappdata}\SysopTV'));
     end;

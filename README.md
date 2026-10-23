@@ -27,7 +27,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Firmware version 0.4.0.
+Firmware version 0.4.1, Windows program version 0.3.0.
 
 Tested on real hardware:
 
@@ -50,6 +50,8 @@ Not yet tested on real hardware, so there is no promise that these work:
 - the device name (new in 0.4.0)
 - `/api/settings` (new in 0.4.0)
 - picture mode with `/api/frame` (new in 0.4.0)
+- "nicht aktiv" for a session without reset time (new in 0.4.1)
+- the Windows program 0.3.0
 
 ## How it works
 
@@ -57,7 +59,7 @@ The cube cannot fetch the limits by itself. A sender on your Windows PC reads th
 
 There are two senders, use only one of them:
 
-- the Windows program SysopTV (`app/`), which runs in the notification area of the taskbar and has a settings window
+- the Windows program SysopTV (`app/`), which runs in the notification area of the taskbar and has its own window
 - the PowerShell script `sender/sysoptv-sender.ps1`, the older and smaller way
 
 Both do the same. There is no script for the original firmware.
@@ -86,15 +88,30 @@ If nobody connects to the hotspot for three minutes and a WLAN is saved, SysopTV
 
 The Windows program SysopTV does the same as the PowerShell script, but runs in the notification area of the taskbar and can be set up in a window. It asks for the limits every 120 seconds and sends them to the cube, with the same rules as the script for errors and for the server limit (see "When something fails").
 
-Since version 0.2.0 it can feed several cubes. Each cube in the list gets one function:
+It can feed several cubes. Each cube in the list gets one function:
 
 - **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
-- **Claude als Bild** (Claude as picture): the program draws the DOS design of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode).
-- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop in the DOS style, also as a picture. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
+- **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode).
+- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop as a picture, in one of four shop designs. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
 
-The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed area. After a restart of the cube and at least every 10 minutes the whole picture goes out.
+The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out.
 
-Version 0.2.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+The program remembers the time of the last query, a pause after error 429 and the last valid values in `%LOCALAPPDATA%\SysopTV\state.json` (never the login key). After a restart it waits until the interval has passed and the pause is over, and shows the stored values until then.
+
+Version 0.3.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+
+### Designs as pictures
+
+For "Claude als Bild" the program draws the designs Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik with the same colours, fonts and positions as firmware 0.4.1, including "nicht aktiv" and "ÜBRIG". Per cube you choose the design, used or remaining, and optionally an automatic change every 30 or 60 seconds, which the program does.
+
+Values that are not fresh stay on the screen with a small "Stand HH:MM" (as of). An expired login shows "ANMELDUNG ABGELAUFEN" in the colours of the design. As long as there are no values at all, the program sends no picture, and after 3 minutes the cube shows its own display without PC. The same applies to the shop.
+
+For "Shop als Bild" there are four designs, all with the 8x16 VGA font:
+
+- **DOS**: table of today, yesterday, 7 days and the month with orders and revenue, the average, open orders and the last order.
+- **Shop Heute** (shop today): today's orders, newest first, with time, order number, amount and a green tick for shipped or a yellow dot for open. If more orders come in than fit, the last line says how many more. Without orders it shows "Noch keine Bestellung heute" and when the last one came. At the bottom the number of orders and the revenue of today.
+- **Kassenbon** (receipt): a receipt on light paper with today, yesterday, 7 days and month, the sum of today in double width, the open orders and a torn edge.
+- **Shop Woche** (shop week): the revenue of the last 7 days in amber, the change to the week before, one bar per day with today on the right, and the number of orders with the average.
 
 The icon in the taskbar shows the state by colour:
 
@@ -103,7 +120,7 @@ The icon in the taskbar shows the state by colour:
 - red: no data from Anthropic, or the cube is not reachable
 - grey: no data yet
 
-Right-click the icon for the menu: current state, send now, open the cube in the browser, settings, open the log, exit. A double-click opens the settings.
+Right-click the icon for the menu: current state, send now, open the cube in the browser, open the window, open the log, exit. A double-click opens the window.
 
 ### Download and installation
 
@@ -114,26 +131,36 @@ Download one of these files from the GitHub Releases:
 
 The program is not signed. On the first start Windows SmartScreen may show "Der Computer wurde durch Windows geschützt" with "Unbekannter Herausgeber" (unknown publisher). Click "Weitere Informationen" (more info), then "Trotzdem ausführen" (run anyway). The warning appears because a code signing certificate costs money every year. The source code is open in this repository, and you can build the program yourself (see "Building").
 
-### Settings
+### The window
 
-At the top the window shows the current values, the state and the time of the last sending.
+At the top the window shows the state and the time of the last sending. On the left is a menu with these pages:
 
-- **Würfel** (cubes): the list of cubes with name, address and function. "Suchen" (search) looks for cubes in your local network, a click on a result adds it. "Von Hand hinzufügen" (add by hand), "Entfernen" (remove) and "Verbindung testen" (test connection, shows firmware version and uptime). For the selected cube: address, function, the optional API key (see "Optional API key") and the admin password of the cube, which the program needs for the display settings.
-- **Anzeige auf dem Würfel** (display on the cube): for cubes with firmware 0.4.0 or newer the program reads and saves design, automatic change, used or remaining, brightness, night mode and device name directly ("Vom Würfel laden", "Auf dem Würfel speichern"). For older firmware a button opens the settings page of the cube in the browser.
-- **Shop (Shopify)**: shop address, the name for the display and the access, see "Shopify".
-- **Programm** (program): the interval for Claude in seconds (at least 120), "Mit Windows starten" (start with Windows) and a button for the log folder.
+- **Übersicht** (overview): one line per cube with name, function, design, last sending and state in colour, below the Claude values and the shop values of today.
+- **Würfel** (cubes): the list of cubes on the left with "Suchen" (search for cubes in your local network, a click on a result adds it), "Von Hand hinzufügen" (add by hand) and "Entfernen" (remove). On the right the selected cube: address, function, design, used or remaining, automatic change, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). Below that the settings stored in the cube itself: brightness, night mode, device name, and for "Claude, Würfel zeichnet selbst" also its design, change and used or remaining. They are read with "Vom Würfel laden" and written with "Auf dem Würfel speichern" (firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser).
+- **Claude**: the interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429 with the time left, and "Jetzt abfragen" (query now, at most once in 120 seconds).
+- **Shopify**: shop address, the name for the display and the access (see "Shopify"), "Shop testen" (test the shop) and the last query.
+- **Programm** (program): "Mit Windows starten" (start with Windows), the log folder, the version and the link to this repository.
 
-The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. A configuration of version 0.1.0 is taken over automatically as one cube with "Claude, Würfel zeichnet selbst". The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
+Settings of the program are saved as soon as you leave a field, there is no save button. Only the settings stored in the cube need "Auf dem Würfel speichern". The window fits on a screen of 1366 x 768 pixels, can be made larger, and long pages scroll.
+
+The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
 
 If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC.
 
-For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes the pictures "Claude als Bild" and "Shop als Bild" with sample data as PNG files, without network.
+For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes every picture design with sample data as PNG files, without network. `--once` also keeps to the 120 seconds after the last query and updates `state.json`.
 
 ### Shopify
 
-The program reads the orders over the Shopify GraphQL Admin API, version `2026-10`. It needs the access scope `read_orders`. Shopify only returns the last 60 days without `read_all_orders`, which is enough for the current month. Cancelled and test orders are not counted. The shop is asked every 5 minutes.
+The program reads the orders over the Shopify GraphQL Admin API, version `2026-10`. It needs the access scope `read_orders`. Shopify only returns the last 60 days without `read_all_orders`, which is enough for the current month and the last 14 days. Cancelled and test orders are not counted. The shop is asked every 5 minutes.
 
-Shown are orders and revenue for today, yesterday, the last 7 days and the current month (in the time zone of the shop), the number of open orders that are not shipped yet, and time and amount of the last order.
+Of each order the program reads only the order number (like #1043), the time, the amount and whether it is shipped. It reads **no customer data**: no names, no addresses, no e-mail addresses.
+
+From that it shows (in the time zone of the shop):
+
+- orders and revenue for today, yesterday, the last 7 days and the current month
+- today's orders, the latest 20 at most, with number, time, amount and shipped or not
+- revenue and orders per day for the last 14 days
+- the number of open orders that are not shipped yet, and time and amount of the last order
 
 Shopify no longer lets you create new custom apps in the shop admin. For your own shop the official way is an app in the Shopify Dev Dashboard with the client credentials grant. Follow the official guides on shopify.dev, the menus there can change:
 
@@ -205,7 +232,7 @@ A single failed query does not change the display. The sender keeps sending the 
 Without an API key, anyone in your network can send values to the cube. With a key, only a sender that knows the key may do that.
 
 1. Open "Einstellungen" (settings) in the web interface and press "Neuen Schlüssel erzeugen" (create new key).
-2. Windows program: enter the key under "API-Schlüssel" in its settings. PowerShell script: add `-ApiKey <key>` to the test command and to the startup shortcut.
+2. Windows program: enter the key under "API-Schlüssel" on the page "Würfel" of its window. PowerShell script: add `-ApiKey <key>` to the test command and to the startup shortcut.
 
 If the key is missing or wrong, the cube answers with error 401 and the log of the sender says so.
 
@@ -324,13 +351,15 @@ Hardware for contributors: ESP8266 (ESP-12F), 4 MB flash, 26 MHz crystal, ST7789
 
 ## Plans
 
-Later the cube should be able to show other data as well, for example orders from an online shop.
+Later the cube could show data of other services as well. The window of the program is built for that: a new service gets its own page in the side menu.
 
 ## License and thanks
 
 The firmware, the Windows program and the PowerShell script are licensed under the GNU General Public License v3.0, see [LICENSE](LICENSE).
 
-The embedded font in `firmware/SysopTV/font_vga.h` is **not** under the GPL. It is converted from "Px437 IBM VGA 8x16" of [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
+The embedded font in `firmware/SysopTV/font_vga.h` is **not** under the GPL. It is converted from "Px437 IBM VGA 8x16" of [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The same applies to `app/SysopTV.Tray/VgaFont.cs`, which adds the euro sign from "PxPlus IBM VGA 8x16" of the same font pack.
+
+`app/SysopTV.Tray/TftFonts.cs` contains the fonts of TFT_eSPI 2.5.43 as plain bitmaps, so the pictures of the program look like the display: the GLCD font of Adafruit_GFX (Copyright (c) 2012 Adafruit Industries, BSD license) and Font 2, 4 and 8 of TFT_eSPI (Copyright (c) 2023 Bodmer, FreeBSD license). The license texts are in the head of the file.
 
 Thanks to:
 
