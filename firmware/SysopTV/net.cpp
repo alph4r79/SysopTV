@@ -1,7 +1,8 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// WLAN connection, setup hotspot, web pages, firmware update and /api/usage.
+// WLAN connection, setup hotspot, web pages, firmware update and the JSON
+// interfaces for the Windows program.
 //
 // Safety rule: the update page must work in every mode (normal, setup hotspot,
 // rescue). The device has no USB data connection, so this page is the only
@@ -15,17 +16,16 @@
 // Pages are sent in pieces (chunked) with the CSS and fixed parts straight
 // from flash, so no page is ever built as one big string in RAM.
 //
-// JSON interfaces for the Windows program: /api/info (open), /api/usage and
-// /api/frame (API key if set), /api/settings (admin password, only with
+// JSON interfaces for the Windows program: /api/info (open), /api/frame and
+// /api/nocarrier (API key if set), /api/settings (admin password, only with
 // Content-Type application/json and X-SysopTV-Client: app, no CORS).
 
 #include "net.h"
 #include "config.h"
 #include "screen.h"
-#include "usage.h"
+#include "ntpclock.h"
 #include "auth.h"
 #include "settings.h"
-#include "design.h"
 #include "frame.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
@@ -74,10 +74,6 @@ a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
 h1{font-size:20px;font-weight:600;color:var(--ac);margin:20px 0 8px}
 h2{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:24px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--ln)}
 p{margin:8px 0}.dim{color:var(--dim)}.ok{color:var(--ok)}.er{color:var(--er)}
-.lim{margin:14px 0}.top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-.pct{font-size:26px;font-variant-numeric:tabular-nums}.pct small{font-size:14px;color:var(--dim);margin-left:6px}
-.bar{height:4px;background:var(--ln);margin:6px 0 4px}.bar i{display:block;height:4px;background:var(--ac)}.bar i.warn{background:var(--er)}
-.num{font-variant-numeric:tabular-nums}
 dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}dt{color:var(--dim)}dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 label{display:block;margin:10px 0 4px;color:var(--dim)}label.opt{color:var(--fg);margin:8px 0}
 input,select,button{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ln);border-radius:2px;padding:10px;width:100%}
@@ -258,9 +254,7 @@ static String ageText(uint32_t seconds) {
   return String(seconds / 3600) + F(" h");
 }
 
-// Data state in one line. Texts in UTF-8, they also go into JSON.
-// Pictures count as data as well: while pictures come, the picture mode is
-// the state. "Keine Daten vom PC" only if neither numbers nor pictures came.
+// Display state in one line. Texts in UTF-8, they also go into JSON.
 static String dataStatus(bool& ok) {
   if (frameModeActive()) {
     ok = true;
@@ -273,55 +267,12 @@ static String dataStatus(bool& ok) {
     t += ageText(frameAgeSeconds());
     return t;
   }
-  UsageStatus st;
-  usageGetStatus(st);
   ok = false;
-  if (!st.havePacket || st.stale) {
-    String t = F("Keine Daten vom PC");
-    if (st.havePacket) {
-      t += F(" seit ");
-      t += ageText(st.ageSeconds);
-    }
-    t += F(". L\xc3\xa4" "uft der Sender auf dem PC?");
-    return t;
+  if (!frameSeen()) {
+    return F("Noch kein Bild vom PC. L\xc3\xa4" "uft das Programm SysopTV?");
   }
-  if (st.state == USAGE_STATE_LOGIN) {
-    return String(F("Anmeldung von Claude Code abgelaufen, Claude Code kurz benutzen (Meldung vor ")) +
-           ageText(st.ageSeconds) + F(")");
-  }
-  if (st.state == USAGE_STATE_ERROR) {
-    return String(F("Der Sender erreicht Anthropic nicht oder wird gebremst (Meldung vor ")) +
-           ageText(st.ageSeconds) + F(")");
-  }
-  ok = true;
-  return String(F("Daten vom PC vor ")) + ageText(st.ageSeconds);
-}
-
-static String percentText(const UsageColumn& c) {
-  return c.present ? String(c.percent) + F(" %") : String(F("--"));
-}
-
-// Reset like on the display, with "Reset" in front (usageResetLine).
-static String resetText(const UsageColumn& c) {
-  char line[24];
-  usageResetLine(c, line, sizeof(line));
-  return String(line);
-}
-
-static const __FlashStringHelper* modeWord(bool showUsed) {
-  return showUsed ? F("verbraucht") : F("\xc3\xbc" "brig");
-}
-
-static String designText() {
-  const Settings& s = settingsGet();
-  String t = designGet(designActive()).name;
-  if (s.cycleSeconds > 0) {
-    t += F(", automatischer Wechsel alle ");
-    t += String(s.cycleSeconds);
-    t += F(" s");
-  } else {
-    t += F(", automatischer Wechsel aus");
-  }
+  String t = F("NO CARRIER, letztes Bild vor ");
+  t += ageText(frameAgeSeconds());
   return t;
 }
 
@@ -341,12 +292,7 @@ static String signalText() {
 }
 
 static String timeText() {
-  switch (usageTimeSource()) {
-    case TIME_SENDER: return F("ja, vom PC");
-    case TIME_NTP: return F("ja, per NTP");
-    case TIME_SENDER_OLD: return F("ja, vom PC (seit 15 min nicht mehr abgeglichen)");
-    default: return F("nein");
-  }
+  return clockSynced() ? F("ja, per NTP") : F("nein");
 }
 
 static String uptimeText() {
@@ -378,15 +324,6 @@ static void passwordFields(Page& p) {
          "<input id=\"pw2\" name=\"pw2\" type=\"password\" autocomplete=\"new-password\" minlength=\"8\" maxlength=\"64\">");
 }
 
-static void limitRow(Page& p, char id, const __FlashStringHelper* name, const UsageColumn& c, bool showUsed) {
-  String sid(id);
-  p << F("<div class=\"lim\"><div class=\"top\"><span>") << name << F("</span><span class=\"pct\"><span id=\"")
-    << sid << F("p\">") << percentText(c) << F("</span><small id=\"") << sid << F("m\">") << modeWord(showUsed)
-    << F("</small></span></div><div class=\"bar\"><i id=\"") << sid << F("b\"") << (c.warn ? F(" class=\"warn\"") : F(""))
-    << F(" style=\"width:") << String(c.present ? c.percent : 0) << F("%\"></i></div><div class=\"dim num\" id=\"")
-    << sid << F("r\">") << htmlEscape(resetText(c)) << F("</div></div>");
-}
-
 static void deviceRow(Page& p, const __FlashStringHelper* name, const char* id, const String& value) {
   p << F("<dt>") << name << F("</dt><dd id=\"") << id << F("\">") << htmlEscape(value) << F("</dd>");
 }
@@ -396,11 +333,7 @@ static void deviceRow(Page& p, const __FlashStringHelper* name, const char* id, 
 static const char OVERVIEW_SCRIPT[] PROGMEM = R"JS(<script>
 function t(i,v){var e=document.getElementById(i);if(e)e.textContent=v}
 function up(){fetch('/api/info').then(function(r){return r.json()}).then(function(j){
-var u=j.usage;if(u){['s','w'].forEach(function(k){var c=u[k=='s'?'session':'week'];
-t(k+'p',c.text);t(k+'m',u.mode);t(k+'r',c.reset);var b=document.getElementById(k+'b');
-if(b){b.style.width=c.bar+'%';b.className=c.warn?'warn':''}});
-var d=document.getElementById('ds');if(d){d.textContent=u.status;d.className=u.statusOk?'ok':'er'}
-t('dd',j.designText)}
+var d=document.getElementById('ds');if(d&&j.displayStatus){d.textContent=j.displayStatus;d.className=j.displayOk?'ok':'er'}
 t('i-name',j.deviceName);t('i-ssid',j.ssid);t('i-ip',j.ip);t('i-sig',j.signalText);t('i-time',j.timeText);
 t('i-up',j.uptimeText);t('i-heap',j.heapKb+' KB');t('i-rst',j.resetReason)}).catch(function(){})}
 setInterval(up,10000);
@@ -423,15 +356,11 @@ static void handleStatus() {
   }
 
   if (!rescueMode) {
-    UsageView view;
-    usageBuildView(view);
     bool ok;
     String status = dataStatus(ok);
-    p << F("<h2>Anzeige</h2>");
-    limitRow(p, 's', F("Session"), view.session, view.showUsed);
-    limitRow(p, 'w', F("Woche"), view.week, view.showUsed);
-    p << F("<p id=\"ds\" class=\"") << (ok ? F("ok") : F("er")) << F("\">") << htmlEscape(status)
-      << F("</p><p class=\"dim\">Design: <span id=\"dd\">") << htmlEscape(designText()) << F("</span></p>");
+    p << F("<h2>Anzeige</h2><p id=\"ds\" class=\"") << (ok ? F("ok") : F("er")) << F("\">") << htmlEscape(status)
+      << F("</p><p class=\"dim\">Was der W&uuml;rfel zeigt, zeichnet das Programm SysopTV auf dem PC. "
+           "Kommen 3 Minuten lang keine Bilder, zeigt er NO CARRIER mit der Uhrzeit.</p>");
   }
 
   p << F("<h2>Ger&auml;t</h2><dl>");
@@ -530,11 +459,6 @@ function u(){for(var i=0;i<n.length;i++)n[i].style.display=c.checked?'':'none'}
 c.addEventListener('change',u);u()})();
 </script>)JS";
 
-static void option(Page& p, int value, int current, const String& text) {
-  p << F("<option value=\"") << String(value) << (value == current ? F("\" selected>") : F("\">")) << text
-    << F("</option>");
-}
-
 static void handleSettingsForm() {
   if (blockedInRescue() || !requireAuth()) {
     return;
@@ -544,24 +468,9 @@ static void handleSettingsForm() {
   p.begin(NAV_SETTINGS);
   p << F("<h1>Einstellungen</h1>");
 
-  // Display and brightness share one form with the save bar at the bottom.
+  // Device name and brightness share one form with the save bar at the bottom.
   // API key and password have their own forms and buttons further down.
   p << F("<form method=\"post\" action=\"/settings\">") << csrfField();
-  p << F("<h2>Anzeige</h2><div class=\"pair\"><div><label for=\"design\">Design</label>"
-         "<select id=\"design\" name=\"design\">");
-  for (int i = 0; i < DESIGN_COUNT; i++) {
-    option(p, i, s.design, designGet(i).htmlName);
-  }
-  p << F("</select></div><div><label for=\"cycle\">Automatisch wechseln</label><select id=\"cycle\" name=\"cycle\">");
-  option(p, 0, s.cycleSeconds, F("aus"));
-  option(p, 30, s.cycleSeconds, F("alle 30 Sekunden"));
-  option(p, 60, s.cycleSeconds, F("alle 60 Sekunden"));
-  p << F("</select></div></div><label>Prozent zeigen</label><label class=\"opt\"><input type=\"radio\" name=\"used\" value=\"1\"")
-    << (s.showUsed ? F(" checked") : F("")) << F(">verbraucht (wie auf claude.ai)</label>")
-    << F("<label class=\"opt\"><input type=\"radio\" name=\"used\" value=\"0\"") << (s.showUsed ? F("") : F(" checked"))
-    << F(">&uuml;brig</label><p class=\"dim\">Die Warnfarbe kommt immer, wenn weniger als 20&nbsp;% "
-         "&uuml;brig sind.</p>");
-
   // Fields with class "night" are hidden by the script below while night
   // mode is off. Without JavaScript they stay visible.
   p << F("<h2>Ger&auml;t</h2><label for=\"devname\">Ger&auml;tename (Buchstaben, Ziffern, Bindestrich, bis 24 Zeichen)</label>"
@@ -579,8 +488,8 @@ static void handleSettingsForm() {
          "<label for=\"nfrom\">Von</label><input id=\"nfrom\" name=\"nfrom\" type=\"time\" value=\"")
     << minutesText(s.nightFrom) << F("\"></div><div><label for=\"nto\">Bis</label>"
          "<input id=\"nto\" name=\"nto\" type=\"time\" value=\"") << minutesText(s.nightTo)
-    << F("\"></div></div><p class=\"dim night\">Der Nachtmodus braucht die Uhrzeit, also Daten "
-         "vom PC oder Internet f&uuml;r die Zeit per NTP.</p>");
+    << F("\"></div></div><p class=\"dim night\">Der Nachtmodus braucht die Uhrzeit, also Internet "
+         "f&uuml;r die Zeit per NTP.</p>");
 
   p << F("<div class=\"save\"><span");
   if (server.hasArg("saved")) {
@@ -602,11 +511,10 @@ static void handleSettingsForm() {
     p << F("<p class=\"er\">Speichern im Flash ist fehlgeschlagen.</p>");
   }
   if (authHasApiKey()) {
-    p << F("<p>Der Sender muss diesen Schl&uuml;ssel mitschicken:</p><p><code>") << authApiKey()
-      << F("</code></p><p class=\"dim\">Aufruf: <code>sysoptv-sender.ps1 -ApiKey ") << authApiKey()
-      << F("</code></p>");
+    p << F("<p>Das Programm SysopTV muss diesen Schl&uuml;ssel mitschicken (Seite W&uuml;rfel, "
+           "Feld API-Schl&uuml;ssel):</p><p><code>") << authApiKey() << F("</code></p>");
   } else {
-    p << F("<p class=\"dim\">Kein Schl&uuml;ssel gesetzt, <code>/api/usage</code> nimmt Daten von jedem im "
+    p << F("<p class=\"dim\">Kein Schl&uuml;ssel gesetzt, der W&uuml;rfel nimmt Bilder von jedem im "
            "WLAN an.</p>");
   }
   p << F("<form method=\"post\" action=\"/settings/key\">") << csrfField()
@@ -639,9 +547,6 @@ static void handleSettingsSave() {
     return;
   }
   snprintf(s.deviceName, sizeof(s.deviceName), "%s", name.c_str());
-  s.design = (uint8_t)server.arg("design").toInt();
-  s.cycleSeconds = (uint8_t)server.arg("cycle").toInt();
-  s.showUsed = server.arg("used") == "1" ? 1 : 0;
   s.brightness = (uint8_t)constrain(server.arg("bright").toInt(), 10, 100);
   s.nightEnabled = server.hasArg("night") ? 1 : 0;
   s.nightBrightness = (uint8_t)constrain(server.arg("nbright").toInt(), 0, 100);
@@ -927,47 +832,6 @@ static void sendJsonError(int code, const char* message) {
   server.send(code, F("application/json"), j);
 }
 
-// POST /api/usage from the sender script. Open unless an API key is set.
-static void handleUsage() {
-  if (rescueMode) {
-    sendJsonError(503, "Rettungsmodus");
-    return;
-  }
-  if (!authApiKeyValid(server.header("X-SysopTV-Key"))) {
-    sendJsonError(401, "Schluessel fehlt oder falsch");
-    return;
-  }
-  // The web server has already read the whole body at this point.
-  if (!server.hasArg("plain")) {
-    sendJsonError(400, "kein JSON");
-    return;
-  }
-  const String& body = server.arg("plain");
-  if (body.length() > SYSOPTV_USAGE_MAX_BODY) {
-    sendJsonError(413, "zu gross");
-    return;
-  }
-  UsagePacket packet;
-  const char* error = usageParse(body.c_str(), body.length(), packet);
-  if (error) {
-    sendJsonError(400, error);
-    return;
-  }
-  // Pictures keep priority: the numbers are stored and only drawn once no
-  // picture came for SYSOPTV_FRAME_TIMEOUT_MS.
-  usageApply(packet);
-  server.send(200, F("application/json"), F("{\"ok\":true}"));
-}
-
-static void limitJson(JsonObject o, const UsageColumn& c) {
-  o["present"] = c.present;
-  o["percent"] = c.percent;
-  o["warn"] = c.warn;
-  o["bar"] = c.present ? c.percent : 0;
-  o["text"] = percentText(c);
-  o["reset"] = resetText(c);
-}
-
 // GET /api/info, always open. No secrets: no password hash, no API key,
 // no WLAN password. The first seven fields keep their old meaning for existing clients.
 static void handleInfo() {
@@ -983,19 +847,18 @@ static void handleInfo() {
   doc["hostname"] = mdnsName();
   doc["deviceName"] = settingsGet().deviceName;
   JsonArray caps = doc["capabilities"].to<JsonArray>();
-  caps.add("usage");
+  // No "usage" since 0.5.0: the firmware takes no numbers and draws no
+  // designs, everything on screen comes from the PC as pictures.
   caps.add("settings");
   caps.add("frame");
+  caps.add("nocarrier");
   doc["ssid"] = setupMode ? apName() + F(" (Hotspot)") : WiFi.SSID();
   doc["signalText"] = signalText();
-  doc["timeSynced"] = usageTimeSource() != TIME_NONE;
+  doc["timeSynced"] = clockSynced();
   doc["timeText"] = timeText();
   doc["uptimeText"] = uptimeText();
   doc["heapKb"] = ESP.getFreeHeap() / 1024;
   doc["resetReason"] = ESP.getResetReason();
-  doc["design"] = designGet(designActive()).name;
-  doc["designCycle"] = settingsGet().cycleSeconds;
-  doc["designText"] = designText();
   doc["frameValid"] = frameValid();
   if (frameSeen()) {
     doc["frameSource"] = frameSource();
@@ -1005,15 +868,9 @@ static void handleInfo() {
     doc["frameAgeSeconds"] = nullptr;
   }
   if (!rescueMode) {
-    UsageView view;
-    usageBuildView(view);
     bool ok;
-    JsonObject u = doc["usage"].to<JsonObject>();
-    u["status"] = dataStatus(ok);
-    u["statusOk"] = ok;
-    u["mode"] = modeWord(view.showUsed);
-    limitJson(u["session"].to<JsonObject>(), view.session);
-    limitJson(u["week"].to<JsonObject>(), view.week);
+    doc["displayStatus"] = dataStatus(ok);
+    doc["displayOk"] = ok;
   }
   String out;
   serializeJson(doc, out);
@@ -1026,13 +883,6 @@ static void handleInfo() {
 
 static void settingsJson(JsonDocument& doc) {
   const Settings& s = settingsGet();
-  doc["design"] = s.design;
-  JsonArray names = doc["designNames"].to<JsonArray>();
-  for (int i = 0; i < DESIGN_COUNT; i++) {
-    names.add(designGet(i).name);
-  }
-  doc["cycleSeconds"] = s.cycleSeconds;
-  doc["showUsed"] = s.showUsed != 0;
   doc["brightness"] = s.brightness;
   JsonObject n = doc["night"].to<JsonObject>();
   n["enabled"] = s.nightEnabled != 0;
@@ -1129,14 +979,14 @@ static void handleApiSettingsPost() {
   }
   Settings s = settingsGet();
   String before = s.deviceName;
-  long design = s.design, cycle = s.cycleSeconds, bright = s.brightness, nbright = s.nightBrightness;
+  long bright = s.brightness, nbright = s.nightBrightness;
   JsonVariantConst night = doc["night"];
   if (!night.isNull() && !night.is<JsonObjectConst>()) {
     sendJsonError(400, "night ungueltig");
     return;
   }
-  bool ok = readNumber(doc["design"], 0, 255, design) && readNumber(doc["cycleSeconds"], 0, 255, cycle) &&
-            readFlag(doc["showUsed"], s.showUsed) && readNumber(doc["brightness"], 0, 255, bright) &&
+  // Fields of older versions (design, cycleSeconds, showUsed) are ignored.
+  bool ok = readNumber(doc["brightness"], 0, 255, bright) &&
             readFlag(night["enabled"], s.nightEnabled) && readTime(night["from"], s.nightFrom) &&
             readTime(night["to"], s.nightTo) && readNumber(night["brightness"], 0, 255, nbright);
   if (!ok) {
@@ -1151,8 +1001,6 @@ static void handleApiSettingsPost() {
     }
     snprintf(s.deviceName, sizeof(s.deviceName), "%s", name.as<const char*>());
   }
-  s.design = (uint8_t)design;
-  s.cycleSeconds = (uint8_t)cycle;
   s.brightness = (uint8_t)bright;
   s.nightBrightness = (uint8_t)nbright;
   if (!settingsUpdate(s)) {
@@ -1230,6 +1078,21 @@ static void handleFrameDone() {
   frameFailure = nullptr;
 }
 
+// POST /api/nocarrier: ends picture mode at once and shows NO CARRIER, for
+// example when the program on the PC quits or the PC goes to sleep. Same
+// protection as /api/frame. The body is ignored. The screen is no longer a
+// picture from the PC, so the next picture must be a full one.
+static void handleNoCarrier() {
+  if (rescueMode) {
+    sendJsonError(503, "Rettungsmodus");
+  } else if (!authApiKeyValid(server.header("X-SysopTV-Key"))) {
+    sendJsonError(401, "Schluessel fehlt oder falsch");
+  } else {
+    frameModeEnd();
+    server.send(200, F("application/json"), F("{\"ok\":true}"));
+  }
+}
+
 static void handleNotFound() {
   if (setupMode) {
     // Captive portal: send every unknown address to the setup page.
@@ -1248,9 +1111,9 @@ static void drawCurrentScreen() {
   if (setupMode) {
     screenSetup(apName().c_str());
   } else if (WiFi.status() == WL_CONNECTED) {
-    // Once usage data has arrived, the design owns the screen and redraws
-    // itself as soon as netScreenFree() is true again.
-    if (rescueMode || !usageScreenActive()) {
+    // Once a picture has arrived, the PC or the NO CARRIER screen owns the
+    // display; main.cpp redraws it as soon as netScreenFree() is true again.
+    if (rescueMode || !frameSeen()) {
       screenReady(WiFi.localIP().toString(), mdnsName(), rescueMode);
     }
   } else {
@@ -1297,7 +1160,7 @@ static void startStation() {
   MDNS.begin(settingsGet().deviceName);
   MDNS.addService("http", "tcp", 80);
   if (!rescueMode) {
-    // Fallback clock when the PC is off. The sender time has priority, see usage.cpp.
+    // Clock for NO CARRIER and the night mode.
     configTime(SYSOPTV_TZ, SYSOPTV_NTP_SERVER);
   }
   screenReady(WiFi.localIP().toString(), mdnsName(), rescueMode);
@@ -1360,13 +1223,14 @@ void netBegin(bool rescue) {
   server.on("/update", HTTP_GET, handleUpdateForm);
   server.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   server.on("/flashbackup", HTTP_GET, handleFlashBackup);
-  server.on("/api/usage", HTTP_POST, handleUsage);
   server.on("/api/info", HTTP_GET, handleInfo);
   server.on("/api/settings", HTTP_GET, handleApiSettingsGet);
   server.on("/api/settings", HTTP_POST, handleApiSettingsPost);
   server.on("/api/settings", HTTP_OPTIONS, handleApiOptions);
   server.on("/api/frame", HTTP_POST, handleFrameDone, handleFrameUpload);
   server.on("/api/frame", HTTP_OPTIONS, handleApiOptions);
+  server.on("/api/nocarrier", HTTP_POST, handleNoCarrier);
+  server.on("/api/nocarrier", HTTP_OPTIONS, handleApiOptions);
   server.onNotFound(handleNotFound);
   server.begin();
 }

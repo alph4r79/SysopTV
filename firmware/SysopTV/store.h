@@ -16,9 +16,10 @@
 #include <stddef.h>
 
 struct StoredSettings {
-  uint8_t design;
-  uint8_t cycleSeconds;     // 0, 30 or 60
-  uint8_t showUsed;         // 1: show usage, 0: show what is left
+  // Design, design cycle and "used or left" up to 0.4.x. The firmware no
+  // longer draws by itself; the bytes stay so the layout does not change and
+  // are always written as 0.
+  uint8_t unused[3];
   uint8_t brightness;       // 10 to 100 percent
   uint8_t nightEnabled;
   uint8_t nightBrightness;  // 0 to 100 percent, 0 switches the display off

@@ -14,6 +14,15 @@
 //   (adoptCubeDesign), until then DOS;
 // - "shop" becomes "shopify" or "woocommerce" after its shopSource;
 // - shop cubes of versions before 0.5.0 keep their design under "Details".
+//
+// A cube can show a second function in turn with the first ("second",
+// "alternate", "alternateSeconds"). The second function is stored as a
+// CubeEntry of its own, only its view fields count.
+//
+// Before every save the old config.json is copied to config.bak.json. If
+// config.json cannot be read at the start, the program takes the backup; if
+// that is broken as well, it starts with defaults and keeps the broken file
+// as config.broken.json.
 
 using System;
 using System.Collections.Generic;
@@ -120,7 +129,16 @@ namespace SysopTV.Tray
         // from /api/info of the cube on the first contact.
         [DataMember(Name = "adoptCubeDesign", EmitDefaultValue = false)] public bool AdoptCubeDesign;
 
+        // "Im Wechsel zeigen": a second function with its own view, in turn
+        // with the first every AlternateSeconds.
+        [DataMember(Name = "alternate")] public bool Alternate;
+        [DataMember(Name = "alternateSeconds")] public int AlternateSeconds = DefaultAlternateSeconds;
+        [DataMember(Name = "second", EmitDefaultValue = false)] public CubeEntry Second;
+
         internal static readonly int[] CycleChoices = { 0, 30, 60 };
+        internal const int DefaultAlternateSeconds = 20;
+        internal const int MinAlternateSeconds = 10;
+        internal const int MaxAlternateSeconds = 120;
 
         internal string ApiKey
         {
@@ -153,6 +171,9 @@ namespace SysopTV.Tray
             Animate = true;
             LegacyShopSource = null;
             AdoptCubeDesign = false;
+            Alternate = false;
+            AlternateSeconds = DefaultAlternateSeconds;
+            Second = null;
         }
 
         // Where the shop numbers come from, given by the function.
@@ -286,11 +307,92 @@ namespace SysopTV.Tray
             LegacyShopSource = null;
             ApiKeyProtected = ApiKeyProtected ?? "";
             AdminPasswordProtected = AdminPasswordProtected ?? "";
+            if (AlternateSeconds < MinAlternateSeconds || AlternateSeconds > MaxAlternateSeconds)
+            {
+                AlternateSeconds = AlternateSeconds <= 0 ? DefaultAlternateSeconds : Math.Max(MinAlternateSeconds, Math.Min(MaxAlternateSeconds, AlternateSeconds));
+            }
+            if (Second != null)
+            {
+                Second.Second = null;
+                Second.Alternate = false;
+                if (Second.Function == Function)
+                {
+                    Second.Function = OtherFunction(Function);
+                    Second.Design = "";
+                }
+            }
+            else if (Alternate)
+            {
+                Alternate = false;
+            }
+        }
+
+        // The first function that is not f, for a new second function.
+        internal static string OtherFunction(string f)
+        {
+            DesignInfo d = Array.Find(CubeFunction.All, x => x.Id != f);
+            return d.Id;
+        }
+
+        // Makes sure there is a second function that differs from the first.
+        internal CubeEntry EnsureSecond()
+        {
+            if (Second == null)
+            {
+                Second = new CubeEntry { Function = OtherFunction(Function) };
+            }
+            else if (Second.Function == Function)
+            {
+                Second.Function = OtherFunction(Function);
+            }
+            return Second;
+        }
+
+        internal bool Alternates
+        {
+            get { return Alternate && Second != null && Second.Function != Function; }
+        }
+
+        // The functions shown, one or two.
+        internal IEnumerable<CubeEntry> Views
+        {
+            get
+            {
+                yield return this;
+                if (Alternates)
+                {
+                    yield return Second;
+                }
+            }
+        }
+
+        // Which view to show now. In turn every AlternateSeconds after the PC
+        // clock; if one of the two has no data, only the other one, until data
+        // comes back.
+        internal CubeEntry ViewAt(DateTime now, Func<CubeEntry, bool> hasData)
+        {
+            if (!Alternates)
+            {
+                return this;
+            }
+            bool first = hasData(this);
+            bool second = hasData(Second);
+            if (first != second)
+            {
+                return first ? this : Second;
+            }
+            long slot = new DateTimeOffset(now).ToUnixTimeSeconds() / Math.Max(MinAlternateSeconds, AlternateSeconds);
+            return slot % 2 == 0 ? this : Second;
         }
 
         internal CubeEntry Copy()
         {
-            return (CubeEntry)MemberwiseClone();
+            var c = (CubeEntry)MemberwiseClone();
+            if (Second != null)
+            {
+                c.Second = Second.Copy();
+            }
+            return c;
         }
     }
 
@@ -386,6 +488,44 @@ namespace SysopTV.Tray
         }
     }
 
+    // "Benachrichtigen, wenn das Limit knapp wird": one Windows message per
+    // threshold and period (session until its reset, week until its reset).
+    [DataContract]
+    internal sealed class NotifyConfig
+    {
+        internal static readonly int[] Thresholds = { 70, 80, 90, 95 };
+        internal const int DefaultThreshold = 90;
+
+        [DataMember(Name = "enabled")] public bool Enabled;
+        [DataMember(Name = "session")] public int Session = DefaultThreshold;  // percent used, 0 is off
+        [DataMember(Name = "week")] public int Week = DefaultThreshold;
+
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Enabled = false;
+            Session = DefaultThreshold;
+            Week = DefaultThreshold;
+        }
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            Session = Clean(Session);
+            Week = Clean(Week);
+        }
+
+        private static int Clean(int v)
+        {
+            return v == 0 || Array.IndexOf(Thresholds, v) >= 0 ? v : DefaultThreshold;
+        }
+
+        internal NotifyConfig Copy()
+        {
+            return (NotifyConfig)MemberwiseClone();
+        }
+    }
+
     [DataContract]
     internal sealed class AppConfig
     {
@@ -395,6 +535,12 @@ namespace SysopTV.Tray
         [DataMember(Name = "intervalSeconds")] public int IntervalSeconds;
         [DataMember(Name = "shop")] public ShopConfig Shop;
         [DataMember(Name = "woocommerce")] public WooConfig Woo;
+        [DataMember(Name = "notify")] public NotifyConfig Notify;
+        // "Einmal täglich nach neuen Versionen suchen", off by default.
+        [DataMember(Name = "updateCheck")] public bool UpdateCheck;
+
+        // Set by Load when config.json was broken and the backup was taken.
+        internal bool RestoredFromBackup;
 
         // Only read, from version 0.1.0.
         [DataMember(Name = "deviceAddress", EmitDefaultValue = false)] public string LegacyAddress;
@@ -417,6 +563,8 @@ namespace SysopTV.Tray
             IntervalSeconds = MinInterval;
             Shop = new ShopConfig();
             Woo = new WooConfig();
+            Notify = new NotifyConfig();
+            UpdateCheck = false;
             LegacyAddress = null;
             LegacyApiKey = null;
         }
@@ -438,7 +586,7 @@ namespace SysopTV.Tray
 
         internal AppConfig Clone()
         {
-            var c = new AppConfig { IntervalSeconds = IntervalSeconds, Shop = Shop.Copy(), Woo = Woo.Copy() };
+            var c = new AppConfig { IntervalSeconds = IntervalSeconds, Shop = Shop.Copy(), Woo = Woo.Copy(), Notify = Notify.Copy(), UpdateCheck = UpdateCheck };
             foreach (CubeEntry e in Cubes)
             {
                 c.Cubes.Add(e.Copy());
@@ -451,23 +599,82 @@ namespace SysopTV.Tray
             return Load(AppPaths.ConfigFile);
         }
 
-        // With a path for the offline tests, which must not touch the real file.
-        internal static AppConfig Load(string path)
+        internal static string BackupPath(string path)
         {
-            AppConfig cfg = null;
+            return Path.Combine(Path.GetDirectoryName(path), "config.bak.json");
+        }
+
+        internal static string BrokenPath(string path)
+        {
+            return Path.Combine(Path.GetDirectoryName(path), "config.broken.json");
+        }
+
+        // Reads one file. Null if it is missing, empty or not valid.
+        private static AppConfig Read(string path, out string error)
+        {
+            error = null;
             try
             {
-                if (File.Exists(path))
+                if (!File.Exists(path))
                 {
-                    using (FileStream fs = File.OpenRead(path))
+                    return null;
+                }
+                using (FileStream fs = File.OpenRead(path))
+                {
+                    var cfg = (AppConfig)new DataContractJsonSerializer(typeof(AppConfig)).ReadObject(fs);
+                    if (cfg == null)
                     {
-                        cfg = (AppConfig)new DataContractJsonSerializer(typeof(AppConfig)).ReadObject(fs);
+                        error = "leer";
                     }
+                    return cfg;
                 }
             }
             catch (Exception ex)
             {
-                Log.Write("Einstellungen nicht lesbar, nehme Standardwerte: " + ex.GetType().Name);
+                error = ex.GetType().Name;
+                return null;
+            }
+        }
+
+        // With a path for the offline tests, which must not touch the real file.
+        internal static AppConfig Load(string path)
+        {
+            string error;
+            AppConfig cfg = Read(path, out error);
+            bool restored = false;
+            if (cfg == null && error != null)
+            {
+                string backup = BackupPath(path);
+                string backupError;
+                cfg = Read(backup, out backupError);
+                if (cfg != null)
+                {
+                    Log.Write("Einstellungen nicht lesbar (" + error + "), aus config.bak.json wiederhergestellt");
+                    try
+                    {
+                        File.Copy(path, BrokenPath(path), true);
+                        File.Copy(backup, path, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Write("Sicherung nicht zurückkopiert: " + ex.GetType().Name);
+                    }
+                    restored = true;
+                }
+                else
+                {
+                    Log.Write("Einstellungen nicht lesbar (" + error + "), Sicherung " + (backupError != null ? "ebenfalls nicht lesbar" : "fehlt") +
+                              ", nehme Standardwerte, die kaputte Datei bleibt als config.broken.json");
+                    try
+                    {
+                        File.Copy(path, BrokenPath(path), true);
+                        File.Delete(path);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Write("config.broken.json nicht angelegt: " + ex.GetType().Name);
+                    }
+                }
             }
             if (cfg == null)
             {
@@ -485,6 +692,11 @@ namespace SysopTV.Tray
             {
                 cfg.Woo = new WooConfig();
             }
+            if (cfg.Notify == null)
+            {
+                cfg.Notify = new NotifyConfig();
+            }
+            cfg.RestoredFromBackup = restored;
             if (cfg.Cubes.Count == 0 && !string.IsNullOrWhiteSpace(cfg.LegacyAddress))
             {
                 cfg.Cubes.Add(new CubeEntry
@@ -511,6 +723,9 @@ namespace SysopTV.Tray
             Save(AppPaths.ConfigFile);
         }
 
+        // Writes a new file next to it first, then swaps. The old config.json
+        // becomes config.bak.json, but only if it can be read: a broken file
+        // never replaces a good backup.
         internal void Save(string path)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
@@ -521,7 +736,9 @@ namespace SysopTV.Tray
             }
             if (File.Exists(path))
             {
-                File.Replace(tmp, path, null);
+                string error;
+                bool oldReadable = Read(path, out error) != null;
+                File.Replace(tmp, path, oldReadable ? BackupPath(path) : null);
             }
             else
             {

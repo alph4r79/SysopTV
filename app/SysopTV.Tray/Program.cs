@@ -14,6 +14,9 @@ namespace SysopTV.Tray
         internal const string MutexName = "Local\\SysopTV-App";
         private const string ShowEventName = "Local\\SysopTV-App-Show";
 
+        // Ends the program like "Beenden" in the menu; set by the tray, used by the program update.
+        internal static Action RequestExit;
+
         internal static string Version
         {
             get
@@ -29,6 +32,12 @@ namespace SysopTV.Tray
             Net.Setup();
             // --data-dir <folder>: config.json, state.json and app.log in that folder.
             AppPaths.DataDirOption = ArgValue(args, "--data-dir");
+
+            // Started by the program update: wait for the old program, then start the setup.
+            if (ArgValue(args, "--run-setup") != null)
+            {
+                return AppUpdate.RunSetup(args);
+            }
 
             if (HasArg(args, "--once"))
             {

@@ -2,13 +2,13 @@
 
 Part of the [developer documentation](developers.md#interfaces-of-the-cube). Back to the [overview of all guides](README.md).
 
-Firmware 0.4.0 and newer can show pictures that a PC draws. The PC sends a picture or a part of it with `POST /api/frame`. The cube decodes it while it is being received and draws it line by line, so it never holds the whole picture in memory.
+Firmware 0.4.0 and newer can show pictures that a PC draws. The PC sends a picture or a part of it with `POST /api/frame`. The cube decodes it while it is being received and draws it line by line, so it never holds the whole picture in memory. Since firmware 0.5.0 pictures are the only way to show something on the cube: `/api/usage` is gone, and the cube has no designs of its own.
 
 ## Request
 
 - Method and path: `POST /api/frame`
 - Body: `multipart/form-data` with exactly one file part (any field name, for example `frame`). The file content is the SYF1 data described below. The web server of the cube can only stream file uploads, which is why the picture comes as a file.
-- Header `X-SysopTV-Key`: needed only if an API key is set on the cube, the same as for `/api/usage`.
+- Header `X-SysopTV-Key`: needed only if an API key is set on the cube, the same as for `/api/nocarrier`.
 - Header `X-SysopTV-Source` (optional, since firmware 0.4.2): a short name of what the picture shows, for example `Claude Limits: DOS`, `Shopify: Großanzeige Kassenbon` or `WooCommerce: Tabelle`. Non-ASCII characters are sent percent encoded as UTF-8 (`%C3%A4` for ä), the cube decodes them. At most 32 bytes are kept. The overview page of the cube shows it as "Bildmodus: <name>, letztes Bild vor 12 s", and `/api/info` returns it as `frameSource` together with `frameAgeSeconds` (both `null` before the first picture).
 - Answers: `200 {"ok":true}`, `400 {"ok":false,"error":"..."}` for broken data, `401` for a missing or wrong key, `409 {"ok":false,"error":"full_frame_required"}` for a part while the screen is not a complete picture (since firmware 0.4.3, see "Valid picture"), `503` in rescue mode.
 
@@ -46,21 +46,31 @@ Lines that were already complete before the error stay on the display.
 
 ## Behaviour
 
-- As soon as a picture has arrived completely, the cube is in picture mode: it only shows pictures and does not draw its own designs over them.
-- If no picture arrives for 3 minutes, it goes back to its own display: its chosen design if fresh numbers come over `/api/usage`, otherwise the display without PC (clock or NO CARRIER with the IP address).
-- Usage data at `/api/usage` does not end picture mode, pictures have priority (since firmware 0.4.2). The cube keeps the numbers, and when no picture came for 3 minutes, it draws its own chosen design with them. Only when no numbers come either, it shows the display without PC.
+- As soon as a picture has arrived completely, the cube is in picture mode and shows only the pictures.
+- If no picture arrives for 3 minutes, it shows NO CARRIER: a big clock (internet time), "NO CARRIER", when the last picture came and its IP address (firmware 0.5.0). Firmware 0.4.x goes back to its own display instead.
 - Brightness and night mode also apply in picture mode.
+
+## Ending picture mode at once
+
+Since firmware 0.5.0 a PC can switch the cube to NO CARRIER without waiting 3 minutes, for example when the program ends or the PC goes to sleep.
+
+- Method and path: `POST /api/nocarrier`
+- Body: none (anything sent is ignored).
+- Header `X-SysopTV-Key`: needed only if an API key is set on the cube, the same as for `/api/frame`.
+- Answers: `200 {"ok":true}`, `401` for a missing or wrong key, `503` in rescue mode. Firmware 0.4.x answers `404`.
+- Afterwards the picture is no longer valid (see below): the next picture must be a full one, a part gets `409` and `full_frame_required`.
+- `GET /api/info` lists `nocarrier` under `capabilities` when the cube knows this address.
 
 ## Valid picture
 
 Since firmware 0.4.3 the cube remembers whether the whole screen currently shows what the PC drew ("Bild gültig"). `GET /api/info` returns it as `frameValid` (`true` or `false`).
 
 - After a start the picture is never valid.
-- It becomes invalid as soon as the firmware draws by itself: its own design (also after 3 minutes without a picture), the clock or NO CARRIER of the display without PC, the update screens and every system screen (start, WLAN, setup hotspot, password reset). A picture that breaks off after some lines were drawn makes it invalid as well.
+- It becomes invalid as soon as the firmware draws by itself: NO CARRIER (after 3 minutes without a picture or after `POST /api/nocarrier`), the update screens and every system screen (start, WLAN, setup hotspot, password reset). With firmware 0.4.x also its own design. A picture that breaks off after some lines were drawn makes it invalid as well.
 - A complete full picture (x = 0, y = 0, width = 240, height = 240) is always accepted and makes it valid again.
 - A part of the screen is only accepted while the picture is valid. Otherwise the cube refuses it before drawing anything, with `409` and `{"ok":false,"error":"full_frame_required"}`. A sender then sends the full picture at once.
 
-This keeps a part from landing on top of the cube's own design, which would leave a mixed picture.
+This keeps a part from landing on top of something the cube drew itself, which would leave a mixed picture.
 
 ## Example
 

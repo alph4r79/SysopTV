@@ -104,7 +104,8 @@ New custom apps can no longer be created in the shop admin. If you still have on
 - **"Shopify erlaubt Client-ID und Secret für diesen Shop nicht"** (`shop_not_permitted`): the app and the shop are not in the same organization. Create the app with the account that owns the shop. According to Shopify, a typical cause is also a development store created outside the Dev Dashboard.
 - **"Zugang abgelehnt"** or **"Anmeldung abgelehnt"** (access or login refused): client ID or secret are wrong, or the app is not installed in the shop. Check both values and step 3. During a new installation of the app this message is normal for a short time.
 - **"Shop nicht gefunden"** (shop not found): check the shop address, it ends with `.myshopify.com`.
-- **The year shows "Für das Jahr fehlt der Zugriff read_all_orders"**: see [Adding a scope later](#adding-a-scope-later).
+- **"Der App fehlt der Scope read_orders"** (the app lacks the scope read_orders): add the scope, release a new version, then uninstall and install the app again in the shop, see [Adding a scope later](#adding-a-scope-later). Client ID and secret stay the same.
+- **The year shows "Für das Jahr fehlt der Zugriff read_all_orders"**: the same steps for `read_all_orders`, see [Adding a scope later](#adding-a-scope-later). The page Shopify of the program says the same.
 - **The year comes later than today**: with the first query of a day the program reads all orders of the year again. With many orders this takes a while, the other values appear together with it. The note "Jahr wird noch berechnet" (year is still being counted) only exists for WooCommerce.
 - **"Zu viele Anfragen"** (too many requests): Shopify asked to wait. The program waits and tries again; the cube shows the time of the next try.
 - **The cube shows "Shop nicht eingetragen"** (shop not set up): shop address or access are missing on the page Shopify.

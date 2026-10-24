@@ -29,7 +29,8 @@ namespace SysopTV.Tray
                 "Das Programm braucht eine eigene App im Shopify Dev Dashboard mit den Scopes read_orders "
                 + "und read_all_orders (für das Jahr), installiert in deinem Shop. Aus den App-Einstellungen (Credentials) kommen Client-ID und Client-Secret "
                 + "hier hinein, das Programm holt sich damit selbst einen Zugang. App und Shop müssen zur selben "
-                + "Organisation gehören. Ein Admin-API-Token einer älteren Custom App geht auch.",
+                + "Organisation gehören. Ein Admin-API-Token einer älteren Custom App geht auch. Fehlt später ein Scope: im Dev Dashboard eintragen, "
+                + "neue Version veröffentlichen, dann die App im Shop deinstallieren und neu installieren. Client-ID und Secret bleiben gleich.",
                 "Anleitung bei Shopify: App im Dev Dashboard anlegen", GuideUrl,
                 g =>
                 {

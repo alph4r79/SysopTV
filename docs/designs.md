@@ -1,6 +1,6 @@
 # Designs
 
-This page shows every picture a cube can show, and the setting on the page "Würfel" of the program that belongs to it.
+This page shows every picture a cube can show, and the setting on the page "Würfel" of the program that belongs to it. With "Im Wechsel zeigen" a cube shows two of them in turn, see [Windows app](windows-app.md#two-functions-in-turn). Without pictures from the program the cube shows NO CARRIER with its clock, see [Installation](installation.md#what-the-cube-shows-without-a-pc).
 
 The pictures come straight from the software (`SysopTV.exe --docs`, sample data). On the real panel the colours look somewhat warmer. The panel shows very dark colours much too bright and with a green tint, so all designs use pure black for dark backgrounds, black text on light backgrounds and keep at least 8 pixels from the edge.
 
@@ -8,7 +8,7 @@ The pictures come straight from the software (`SysopTV.exe --docs`, sample data)
 
 Setting: function **Claude Limits**, then **Design**. "Prozent zeigen" switches between used ("verbraucht") and remaining ("übrig"), "Automatisch wechseln" changes through all ten designs.
 
-The first six are also the designs of the firmware. The program draws them with the same colours, fonts and positions, and a cube with older firmware draws them itself. Only the program has the last four.
+The program draws every design itself and sends it to the cube as a picture.
 
 <table>
   <tr>

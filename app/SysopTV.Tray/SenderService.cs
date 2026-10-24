@@ -3,15 +3,20 @@
 //
 // Works in the background for all cubes:
 // - every interval (at least 120 s) one query at Anthropic, no matter how many
-//   cubes show Claude Limits; the numbers go to those cubes at once. Time of
-//   the last query, a 429 block and the last valid values are kept in
-//   state.json, so a restart neither asks too early nor shows nothing.
+//   cubes show Claude Limits, also without such a cube if limit warnings are
+//   on. Time of the last query, a 429 block and the last valid values are
+//   kept in state.json, so a restart neither asks too early nor shows nothing.
 // - every 5 minutes Shopify or WooCommerce, if a cube shows that shop
 // - every second the pictures for all cubes with picture mode are drawn;
 //   only the changed parts are sent (up to four), a full picture after a
-//   restart of the cube and at least every 10 minutes. Without any data the
-//   cube gets a notice. Cubes without picture mode (firmware before 0.4.0)
-//   get only the numbers and show them in their own design.
+//   restart of the cube, on every change between two functions and at least
+//   every 10 minutes. Without any data the cube gets a notice. The program
+//   sends no numbers to the cube any more; cubes without picture mode
+//   (firmware before 0.4.0) get nothing until their firmware is updated.
+// - on exit, at the end of the Windows session and before sleep every cube
+//   gets NO CARRIER at once (SignOff), during a firmware update the cube gets
+//   no pictures.
+// - once a day the update check, if it is switched on.
 
 using System;
 using System.Collections.Generic;
@@ -72,6 +77,8 @@ namespace SysopTV.Tray
             internal string Firmware;  // version from /api/info, null until known
             internal bool? FrameValid; // the cube shows our whole picture (firmware 0.4.3 and newer), null if unknown
             internal bool? CanFrame;   // picture mode (firmware 0.4.0 and newer), null until /api/info answered
+            internal bool? CanNoCarrier; // POST /api/nocarrier (firmware 0.5.0 and newer), null until known
+            internal int ShownView = -1; // 0 first function, 1 second function, -1 nothing yet
             internal DateTime LastFrameSend = DateTime.MinValue;
         }
 
@@ -133,6 +140,16 @@ namespace SysopTV.Tray
         // A cube taken over from "usage" got the design of the cube (address).
         // The tray saves the settings then.
         internal event Action<string> CubeAdopted;
+
+        // A limit warning to show as a Windows message.
+        internal event Action<string> LimitAlert;
+
+        // The update check found a newer program or a newer firmware (shown once per version).
+        internal event Action<ReleaseInfo> UpdateFound;
+        internal event Action<ReleaseInfo> FirmwareFound;
+
+        // The answer of the GitHub API. The offline tests put a fake here.
+        internal Func<string> FetchRelease = UpdateCheck.Fetch;
 
         internal SenderStatus Status { get; private set; }
 
@@ -292,9 +309,10 @@ namespace SysopTV.Tray
             ThreadPool.QueueUserWorkItem(_ => RunRound(true));
         }
 
+        // A cube shows this function, as first or second function.
         private bool AnyCube(string function)
         {
-            return config.Cubes.Any(c => c.Function == function);
+            return config.Cubes.Any(c => c.Views.Any(v => v.Function == function));
         }
 
         // Is a query at Anthropic due? Public for the tests.
@@ -306,6 +324,14 @@ namespace SysopTV.Tray
         // Every 5 seconds: at the start send what state.json has, then a round when it is due.
         private void OnTick()
         {
+            if (suspended)
+            {
+                return;
+            }
+            if (UpdateCheck.Due(config.UpdateCheck, state.UpdateCheckedAt, DateTimeOffset.Now) && DateTime.Now >= nextUpdateTry)
+            {
+                ThreadPool.QueueUserWorkItem(_ => CheckForUpdate(false));
+            }
             if (!started)
             {
                 started = true;
@@ -325,7 +351,132 @@ namespace SysopTV.Tray
             }
         }
 
-        // One round: Anthropic once if due, then the numbers to the Claude cubes that take them.
+        private int updateBusy;
+        private DateTime nextUpdateTry = DateTime.MinValue;  // after a check without network
+
+        private volatile bool manualCheckDone;
+
+        // Asks GitHub for the latest release: automatically at most once a day
+        // while the update check is on, or once after "Jetzt nach Updates
+        // suchen" (manual, also with the check switched off). Without network it
+        // says nothing and the automatic check tries again in an hour. Each new
+        // program and each new firmware is reported once.
+        internal UpdateCheckResult CheckForUpdate(bool manual)
+        {
+            var result = new UpdateCheckResult();
+            if (Interlocked.Exchange(ref updateBusy, 1) == 1)
+            {
+                return result;
+            }
+            try
+            {
+                long now = DateTimeOffset.Now.ToUnixTimeSeconds();
+                string json = FetchRelease();
+                if (manual)
+                {
+                    manualCheckDone = true;
+                }
+                if (string.IsNullOrEmpty(json))
+                {
+                    nextUpdateTry = DateTime.Now.AddHours(1);
+                    return result;
+                }
+                result.Reached = true;
+                state.UpdateCheckedAt = now;
+                ReleaseInfo r = UpdateCheck.Parse(json);
+                if (r == null)
+                {
+                    // A draft, a pre-release or no usable files: nothing new.
+                    state.Save(statePath);
+                    return result;
+                }
+                result.Release = r;
+                state.UpdateCheckedAt = now;
+                state.UpdateRelease = r;
+                result.AppNewer = UpdateCheck.Newer(r.AppVersion, Program.Version);
+                result.FirmwareNewer = UpdateCheck.Newer(r.FirmwareVersion, FirmwareBaseline());
+                bool showApp = result.AppNewer && state.UpdateNotified != r.AppVersion;
+                bool showFirmware = result.FirmwareNewer && state.UpdateNotifiedFirmware != r.FirmwareVersion;
+                if (showApp)
+                {
+                    state.UpdateNotified = r.AppVersion;
+                    Log.Write("Neue Version " + r.AppVersion + " auf GitHub");
+                }
+                if (showFirmware)
+                {
+                    state.UpdateNotifiedFirmware = r.FirmwareVersion;
+                    Log.Write("Neue Firmware " + r.FirmwareVersion + " auf GitHub");
+                }
+                state.Save(statePath);
+                Action<ReleaseInfo> app = UpdateFound;
+                if (showApp && app != null)
+                {
+                    app(r);
+                }
+                Action<ReleaseInfo> fw = FirmwareFound;
+                if (showFirmware && fw != null)
+                {
+                    fw(r);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Update-Prüfung: " + ex.GetType().Name);
+            }
+            finally
+            {
+                Interlocked.Exchange(ref updateBusy, 0);
+            }
+            return result;
+        }
+
+        // The firmware a new release is compared with: the oldest SysopTV
+        // firmware of the cubes, or the firmware that comes with the program.
+        private string FirmwareBaseline()
+        {
+            string oldest = null;
+            lock (gate)
+            {
+                foreach (CubeState st in states.Values)
+                {
+                    if (st.Firmware != null && (oldest == null || UpdateCheck.Newer(oldest, st.Firmware)))
+                    {
+                        oldest = st.Firmware;
+                    }
+                }
+            }
+            if (oldest != null)
+            {
+                return oldest;
+            }
+            BundledFirmware b = BundledFirmware.Find();
+            return b != null ? b.Version : "0.0.0";
+        }
+
+        // The release of the last check, but only while updates may be used:
+        // the update check is on, or "Jetzt nach Updates suchen" ran in this session.
+        internal ReleaseInfo UsableRelease
+        {
+            get { return config.UpdateCheck || manualCheckDone ? state.UpdateRelease : null; }
+        }
+
+        // The release, if its program is newer than this one.
+        internal ReleaseInfo NewerRelease
+        {
+            get
+            {
+                ReleaseInfo r = UsableRelease;
+                return r != null && UpdateCheck.Newer(r.AppVersion, Program.Version) ? r : null;
+            }
+        }
+
+        internal DateTime? UpdateCheckedAt
+        {
+            get { return AppState.ToLocal(state.UpdateCheckedAt); }
+        }
+
+        // One round: Anthropic once if due (for the pictures and the limit
+        // warnings), then the shops.
         internal void RunRound(bool manual)
         {
             if (Interlocked.Exchange(ref roundBusy, 1) == 1)
@@ -335,7 +486,7 @@ namespace SysopTV.Tray
             try
             {
                 AppConfig cfg = config;
-                if (AnyCube(CubeFunction.Claude))
+                if (AnyCube(CubeFunction.Claude) || cfg.Notify.Enabled)
                 {
                     DateTime now = DateTime.Now;
                     UsageData data;
@@ -361,15 +512,26 @@ namespace SysopTV.Tray
                             nextRound = now.AddSeconds(cfg.Interval);
                         }
                         data = policy.Resolve(raw, now);
+                        List<string> alerts = new List<string>();
                         if (data.State == "ok" && !data.Held)
                         {
                             lastOk = data;
                             lastOkTime = now;
                             state.SetLastOk(data, now);
+                            alerts = LimitNotifier.Check(data.Session, data.Week, cfg.Notify, state, DateTimeOffset.Now);
                         }
                         state.LastQuery = AppState.ToUnix(LastQuery);
                         state.BlockedUntil = AppState.ToUnix(BlockedUntil);
                         state.Save(statePath);
+                        Action<string> alert = LimitAlert;
+                        foreach (string text in alerts)
+                        {
+                            Log.Write("Hinweis: " + text);
+                            if (alert != null)
+                            {
+                                alert(text);
+                            }
+                        }
                     }
                     if (nextRound <= now)
                     {
@@ -381,11 +543,6 @@ namespace SysopTV.Tray
                     {
                         Log.Write("Daten: " + summary);
                         lastSummary = summary;
-                    }
-                    string json = data.ToJson(DateTimeOffset.Now);
-                    foreach (CubeEntry c in cfg.Cubes.Where(NumbersWanted))
-                    {
-                        Remember(c, Cube.SendUsage(c.Address, json, c.ApiKey));
                     }
                 }
                 FetchShops(cfg);
@@ -410,7 +567,7 @@ namespace SysopTV.Tray
             foreach (DesignInfo source in ShopSources.All)
             {
                 ShopFeed feed = feeds[source.Id];
-                bool shown = cfg.Cubes.Any(c => c.Function == source.Id);
+                bool shown = cfg.Cubes.Any(c => c.Views.Any(v => v.Function == source.Id));
                 if (shown && cfg.SourceConfigured(source.Id) && now - feed.LastQuery >= ShopInterval && now >= feed.BlockedUntil)
                 {
                     FetchShop(source.Id, cfg, now);
@@ -496,39 +653,13 @@ namespace SysopTV.Tray
             }
         }
 
-        // Claude cubes get the numbers: without picture mode (firmware before
-        // 0.4.0) they show them in their own design, with picture mode they keep
-        // them for the fall back. Only firmware 0.4.2 and newer keeps pictures in
-        // front of the numbers, 0.4.0 and 0.4.1 would leave picture mode.
-        private bool NumbersWanted(CubeEntry c)
-        {
-            if (c.Function != CubeFunction.Claude)
-            {
-                return false;
-            }
-            CubeState st;
-            lock (gate)
-            {
-                st = StateFor(c);
-            }
-            if (st.CanFrame == null)
-            {
-                CubeInfo info = ReadInfo(c.Address);
-                if (info == null)
-                {
-                    return true;  // not reachable: the send shows the error
-                }
-                Learn(c, st, info);
-            }
-            return st.CanFrame != true || CubeInfo.CompareVersion(st.Firmware, 0, 4, 2) >= 0;
-        }
-
         // What /api/info says about a cube.
         private void Learn(CubeEntry c, CubeState st, CubeInfo info)
         {
             st.Firmware = info.Version;
             st.FrameValid = info.FrameValid;
             st.CanFrame = info.CanFrame;
+            st.CanNoCarrier = info.CanNoCarrier;
             if (Adopt(c, info))
             {
                 Log.Write("Würfel " + c.Title + ": Design vom Würfel übernommen, " + SourceText(c, c.DesignOrDefault));
@@ -626,8 +757,9 @@ namespace SysopTV.Tray
             }
         }
 
-        // Sending a part and reading /api/info. The offline tests put fakes here.
+        // Sending a part, NO CARRIER and reading /api/info. The offline tests put fakes here.
         internal Func<string, byte[], string, string, SendResult> SendFrameTo = Cube.SendFrame;
+        internal Func<string, string, TimeSpan, SendResult> SendNoCarrierTo = Cube.SendNoCarrier;
         internal Func<string, CubeInfo> ReadInfo = address => Cube.GetInfo(address, TimeSpan.FromSeconds(3));
 
         // A picture at least this often, so the cube never leaves picture mode
@@ -654,6 +786,10 @@ namespace SysopTV.Tray
         // something was sent or the state changed.
         internal bool FrameRound(CubeEntry c, DateTime now)
         {
+            if (signedOff || Updating(c.Address))
+            {
+                return false;
+            }
             CubeState st;
             lock (gate)
             {
@@ -681,14 +817,21 @@ namespace SysopTV.Tray
             {
                 return false;
             }
-            string design = c.PictureAt(now);
-            Canvas canvas = Render(c, design, now);
+            // With a second function: the one to show now, the other one only
+            // while this one has no data.
+            CubeEntry view = c.ViewAt(now, HasData);
+            int viewIndex = view == c ? 0 : 1;
+            string design = view.PictureAt(now);
+            Canvas canvas = Render(view, design, now);
             if (canvas == null)
             {
                 return false;
             }
+            bool switched = st.ShownView != viewIndex;
+            st.ShownView = viewIndex;
             st.ShownDesign = design;
-            bool full = restarted || st.LastSent == null || now - st.LastFull >= FullFrameEvery;
+            // Another function: always a full picture.
+            bool full = switched || restarted || st.LastSent == null || now - st.LastFull >= FullFrameEvery;
             bool knowsValid = st.Firmware != null && CubeInfo.CompareVersion(st.Firmware, 0, 4, 3) >= 0;
             TimeSpan quiet = now - st.LastFrameSend;
             // Never a part on a screen the cube drew itself.
@@ -709,9 +852,9 @@ namespace SysopTV.Tray
                 parts = new List<Rectangle> { full ? WholeScreen : KeepAlivePart };
             }
             SendResult r = null;
-            string source = SourceText(c, design);
+            string source = SourceText(view, design);
             // Fallblatt: the changing cards flip over in three small steps first.
-            if (!full && design == "fallblatt" && c.Animate)
+            if (!full && design == "fallblatt" && view.Animate)
             {
                 Canvas shown = st.LastSent;
                 foreach (Canvas frame in FlipAnimation.Frames(st.LastSent, canvas))
@@ -782,7 +925,18 @@ namespace SysopTV.Tray
             return now - okTime.Value > freshFor ? UsageView.StampText(okTime.Value) : null;
         }
 
-        // The picture for one cube, or null without any data.
+        // Does this function have numbers to show (or the login notice of Claude)?
+        internal bool HasData(CubeEntry view)
+        {
+            if (view.Function == CubeFunction.Claude)
+            {
+                return lastOk != null || (lastSent != null && lastSent.State == "login");
+            }
+            return view.IsShop && feeds[view.ShopSource].Data != null;
+        }
+
+        // The picture for one function of a cube (the cube itself or its
+        // second function), a notice without any data.
         internal Canvas Render(CubeEntry c, string design, DateTime now)
         {
             if (c.Function == CubeFunction.Claude)
@@ -883,7 +1037,7 @@ namespace SysopTV.Tray
                 {
                     CubeState st;
                     states.TryGetValue(c.Address, out st);
-                    var row = new CubeRow { Title = c.Title, Function = CubeFunction.Label(c.Function) };
+                    var row = new CubeRow { Title = c.Title, Function = FunctionText(c) };
                     bool oldFirmware = st != null && st.CanFrame == false;
                     if (oldFirmware)
                     {
@@ -891,9 +1045,15 @@ namespace SysopTV.Tray
                     }
                     else
                     {
-                        string id = st != null && st.ShownDesign != null ? st.ShownDesign : c.PictureAt(DateTime.Now);
-                        bool change = c.ShopBigView ? c.PeriodCycleSeconds > 0 && !ShopBig.ShowsAllPeriods(id) : c.CycleSeconds > 0;
-                        row.Design = c.PictureLabel(id) + (change ? ", Wechsel" : "");
+                        var designs = new List<string>();
+                        int index = 0;
+                        foreach (CubeEntry v in c.Views)
+                        {
+                            bool shown = st != null && st.ShownDesign != null && st.ShownView == index;
+                            designs.Add(DesignText(v, shown ? st.ShownDesign : v.PictureAt(DateTime.Now)));
+                            index++;
+                        }
+                        row.Design = string.Join(" / ", designs);
                     }
                     if (st == null || st.LastResult == null)
                     {
@@ -917,8 +1077,209 @@ namespace SysopTV.Tray
             return rows;
         }
 
+        // "Claude Limits" or, with a second function, "Claude Limits / Shopify (20 s)".
+        internal static string FunctionText(CubeEntry c)
+        {
+            if (!c.Alternates)
+            {
+                return CubeFunction.Label(c.Function);
+            }
+            return CubeFunction.Label(c.Function) + " / " + CubeFunction.Label(c.Second.Function) + " (" + c.AlternateSeconds + " s)";
+        }
+
+        private static string DesignText(CubeEntry v, string id)
+        {
+            bool change = v.ShopBigView ? v.PeriodCycleSeconds > 0 && !ShopBig.ShowsAllPeriods(id) : v.CycleSeconds > 0;
+            return v.PictureLabel(id) + (change ? ", Wechsel" : "");
+        }
+
+        // Firmware version of a cube from /api/info, null until known.
+        internal string FirmwareOf(string address)
+        {
+            lock (gate)
+            {
+                CubeState st;
+                return states.TryGetValue(address, out st) ? st.Firmware : null;
+            }
+        }
+
+        // ---- firmware update: no pictures to this cube meanwhile ----
+
+        private readonly HashSet<string> updating = new HashSet<string>();
+
+        internal void BeginUpdate(string address)
+        {
+            lock (gate)
+            {
+                updating.Add(address);
+            }
+            // A picture that is just being sent finishes first.
+            WaitForFrames(TimeSpan.FromSeconds(5));
+        }
+
+        // After the update everything is read again and a full picture follows.
+        internal void EndUpdate(string address)
+        {
+            lock (gate)
+            {
+                updating.Remove(address);
+                CubeState st;
+                if (states.TryGetValue(address, out st))
+                {
+                    Forget(st);
+                }
+            }
+        }
+
+        private bool Updating(string address)
+        {
+            lock (gate)
+            {
+                return updating.Contains(address);
+            }
+        }
+
+        private static void Forget(CubeState st)
+        {
+            st.LastSent = null;
+            st.LastInfo = DateTime.MinValue;
+            st.LastUptime = -1;
+            st.FrameValid = null;
+            st.CanFrame = null;
+            st.CanNoCarrier = null;
+            st.Firmware = null;
+            st.ShownView = -1;
+        }
+
+        private void WaitForFrames(TimeSpan max)
+        {
+            DateTime until = DateTime.Now + max;
+            while (Volatile.Read(ref frameBusy) == 1 && DateTime.Now < until)
+            {
+                Thread.Sleep(20);
+            }
+        }
+
+        // ---- NO CARRIER on exit, end of session and sleep ----
+
+        private volatile bool signedOff;
+        private volatile bool suspended;
+
+        // The picture for cubes with firmware before 0.5.0, which have no
+        // /api/nocarrier. They keep it until their own fall back after 3 minutes.
+        internal static Canvas NoCarrierPicture(DateTime now)
+        {
+            var c = new Canvas();
+            c.Clear(0);
+            c.Text("NO CARRIER", 120, 92, Align.Center, 2, ClaudeDesigns.AmberMain, 0);
+            c.Text("PC aus seit " + now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture), 120, 136, Align.Center, 1, ClaudeDesigns.AmberDim, 0);
+            return c;
+        }
+
+        // Every cube shows NO CARRIER at once: firmware 0.5.0 and newer over
+        // /api/nocarrier, older cubes with picture mode get a NO CARRIER
+        // picture. All cubes at the same time, never longer than timeout in
+        // total. Afterwards no more pictures until Resume().
+        internal void SignOff(TimeSpan timeout)
+        {
+            if (signedOff)
+            {
+                return;  // already done, for example before the program update
+            }
+            signedOff = true;
+            WaitForFrames(TimeSpan.FromMilliseconds(Math.Min(1000, timeout.TotalMilliseconds / 2)));
+            List<CubeEntry> cubes = config.Cubes.Where(c => !string.IsNullOrWhiteSpace(c.Address)).ToList();
+            var tasks = new List<System.Threading.Tasks.Task>();
+            DateTime now = DateTime.Now;
+            foreach (CubeEntry c in cubes)
+            {
+                CubeState st;
+                lock (gate)
+                {
+                    st = StateFor(c);
+                }
+                tasks.Add(System.Threading.Tasks.Task.Run(() => SignOffCube(c, st, timeout, now)));
+            }
+            try
+            {
+                System.Threading.Tasks.Task.WaitAll(tasks.ToArray(), timeout);
+            }
+            catch (AggregateException)
+            {
+            }
+        }
+
+        private void SignOffCube(CubeEntry c, CubeState st, TimeSpan timeout, DateTime now)
+        {
+            try
+            {
+                if (Updating(c.Address) || st.CanFrame == false)
+                {
+                    return;  // never during an update; without picture mode there is nothing to end
+                }
+                SendResult r = null;
+                bool modern = st.CanNoCarrier == true || (st.Firmware != null && CubeInfo.CompareVersion(st.Firmware, 0, 5, 0) >= 0);
+                if (modern || st.CanNoCarrier == null)
+                {
+                    r = SendNoCarrierTo(c.Address, c.ApiKey, timeout);
+                }
+                // Firmware before 0.5.0 answers 404: it gets a picture instead.
+                if (!modern && (r == null || r.Status == 404 || st.CanNoCarrier == false))
+                {
+                    r = SendFrameTo(c.Address, FrameCodec.Encode(NoCarrierPicture(now), WholeScreen), c.ApiKey, "SysopTV: NO CARRIER");
+                }
+                lock (gate)
+                {
+                    st.LastSent = null;
+                    st.FrameValid = false;
+                    st.ShownView = -1;
+                }
+                if (r != null)
+                {
+                    Log.Write("Würfel " + c.Title + ": NO CARRIER " + (r.Ok ? "gesendet" : "nicht gesendet, " + r.Message));
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Würfel " + c.Title + ": NO CARRIER nicht gesendet, " + ex.GetType().Name);
+            }
+        }
+
+        // Before sleep: NO CARRIER, then nothing until Resume().
+        internal void Suspend(TimeSpan timeout)
+        {
+            suspended = true;
+            if (timersRunning)
+            {
+                roundTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                frameTimer.Change(Timeout.Infinite, Timeout.Infinite);
+            }
+            SignOff(timeout);
+            Log.Write("Ruhezustand, Würfel zeigen NO CARRIER");
+        }
+
+        // After sleep: everything as after a start, every cube gets a full picture.
+        internal void Resume()
+        {
+            lock (gate)
+            {
+                foreach (CubeState st in states.Values)
+                {
+                    Forget(st);
+                }
+            }
+            signedOff = false;
+            suspended = false;
+            Log.Write("Zurück aus dem Ruhezustand");
+            if (timersRunning)
+            {
+                roundTimer.Change(TimeSpan.FromSeconds(5), Tick);
+                frameTimer.Change(TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1));
+            }
+        }
+
         // Only for the pictures of the documentation (--docs): values as if the
-        // program had run for a while, every cube reached with firmware 0.4.3.
+        // program had run for a while, every cube reached with firmware 0.5.0.
         // Nothing is asked and nothing is sent.
         internal void ShowSamples(UsageData claudeData, DateTime okTime, Dictionary<string, ShopData> shops)
         {
@@ -939,8 +1300,9 @@ namespace SysopTV.Tray
                 foreach (CubeEntry c in config.Cubes)
                 {
                     CubeState st = StateFor(c);
-                    st.Firmware = "0.4.3";
+                    st.Firmware = "0.5.0";
                     st.CanFrame = true;
+                    st.CanNoCarrier = true;
                     st.FrameValid = true;
                     st.LastResult = new SendResult { Ok = true, Status = 200, Message = "HTTP 200" };
                     st.LastSend = okTime.AddSeconds(30 - 4 * i++);

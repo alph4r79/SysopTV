@@ -1,10 +1,12 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// SysopTV.exe --once [--device <address>]: query once, send to the cube,
-// print the result and exit. Never prints the token.
+// SysopTV.exe --once [--device <address>]: query once, send one full picture
+// of the Claude design to the cube, print the result and exit. Never prints
+// the token.
 
 using System;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -89,10 +91,24 @@ namespace SysopTV.Tray
                 Console.WriteLine("Woche:   " + Describe(data.Week));
             }
 
-            SendResult send = Cube.SendUsage(device, data.ToJson(DateTimeOffset.Now), cube.ApiKey);
+            // The cube draws nothing itself: the numbers go as a picture in the design of the cube.
+            CubeEntry view = cube.Function == CubeFunction.Claude ? cube : new CubeEntry { Function = CubeFunction.Claude };
+            string design = view.DesignOrDefault;
+            Canvas picture;
+            if (data.State == "ok" || data.State == "login")
+            {
+                UsageData values = data.State == "ok" ? data : stored;
+                picture = ClaudeDesigns.Render(design, UsageView.Build(values, data.State == "login", null, view.ShowUsed, DateTimeOffset.Now));
+            }
+            else
+            {
+                picture = Notice.Render(design, "CLAUDE", "Keine Daten von Anthropic", null, DateTime.Now);
+            }
+            SendResult send = Cube.SendFrame(device, FrameCodec.Encode(picture, new Rectangle(0, 0, Canvas.Size, Canvas.Size)), cube.ApiKey,
+                                             SenderService.SourceText(view, design));
             if (send.Ok)
             {
-                Log.Write("Würfel hat die Daten angenommen: " + send.Message);
+                Log.Write("Würfel hat das Bild angenommen: " + send.Message);
             }
             else
             {

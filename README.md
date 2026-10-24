@@ -20,9 +20,10 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 1. Get a GeekMagic SmallTV Ultra with ESP8266 and a Windows 10 or 11 PC in the same network.
 2. Put the firmware on the cube through the web interface of the original firmware and connect it to your WLAN: [Installation](docs/installation.md).
-3. Install the Windows program, find the cube and choose the function Claude Limits, Shopify or WooCommerce: [Windows app](docs/windows-app.md).
+3. Install the Windows program, find the cube and choose the function Claude Limits, Shopify or WooCommerce, or two of them in turn: [Windows app](docs/windows-app.md). The program draws every picture; without it the cube shows NO CARRIER with its clock.
 4. For the Claude display, Claude Code must be installed and logged in: [Claude limits](docs/claude.md).
 5. For a shop, connect it: [Shopify](docs/shopify-setup.md) or [WooCommerce](docs/woocommerce-setup.md).
+6. Later firmware updates come with the program: "Firmware aktualisieren" on the page "Würfel".
 
 ## Documentation
 
@@ -42,7 +43,7 @@ Project website: [sysoptv.de](https://sysoptv.de).
 
 ## Downloads
 
-Firmware, Windows program and WordPress plugin are on the [GitHub Releases](https://github.com/alph4r79/SysopTV/releases) page.
+Firmware, Windows program and WordPress plugin are on the [GitHub Releases](https://github.com/alph4r79/SysopTV/releases) page. Setup and ZIP of the program contain the matching firmware.
 
 ## Please note
 
@@ -61,7 +62,7 @@ The styles Hell and Fallblatt use two fonts under the [SIL Open Font License 1.1
 - [Inter](https://github.com/rsms/inter) 4.1 (Regular and Bold), Copyright (c) 2016 The Inter Project Authors, from the official release on GitHub. License: `OFL-Inter.txt`.
 - [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 2.304 (Bold), Copyright 2020 The JetBrains Mono Project Authors, from the official release on GitHub. License: `OFL-JetBrainsMono.txt`.
 
-`app/SysopTV.Tray/TftFonts.cs` contains the fonts of TFT_eSPI 2.5.43 as plain bitmaps, so the pictures of the program look like the display: the GLCD font of Adafruit_GFX (Copyright (c) 2012 Adafruit Industries, BSD license) and Font 2, 4 and 8 of TFT_eSPI (Copyright (c) 2023 Bodmer, FreeBSD license). The license texts are in the head of the file.
+`app/SysopTV.Tray/TftFonts.cs` contains the fonts of TFT_eSPI 2.5.43 as plain bitmaps, so the pictures of the program look like the designs of the earlier firmware: the GLCD font of Adafruit_GFX (Copyright (c) 2012 Adafruit Industries, BSD license) and Font 2, 4 and 8 of TFT_eSPI (Copyright (c) 2023 Bodmer, FreeBSD license). The license texts are in the head of the file.
 
 Thanks to:
 

@@ -3,7 +3,6 @@
 
 #include "settings.h"
 #include "config.h"
-#include "design.h"
 #include <Arduino.h>
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +14,6 @@ static bool rescueMode = false;
 Settings settingsDefaults() {
   Settings s;
   memset(&s, 0, sizeof(s));
-  s.design = DESIGN_SAEULEN;
-  s.cycleSeconds = 0;
-  s.showUsed = 1;
   s.brightness = 100;
   s.nightEnabled = 0;
   s.nightBrightness = 10;
@@ -52,13 +48,8 @@ bool settingsNameValid(const char* name) {
 
 void settingsSanitize(Settings& s) {
   Settings d = settingsDefaults();
-  if (s.design >= DESIGN_COUNT) {
-    s.design = d.design;
-  }
-  if (s.cycleSeconds != 0 && s.cycleSeconds != 30 && s.cycleSeconds != 60) {
-    s.cycleSeconds = 0;
-  }
-  s.showUsed = s.showUsed ? 1 : 0;
+  // Old design settings from 0.4.x must not matter any more.
+  memset(s.unused, 0, sizeof(s.unused));
   if (s.brightness < 10) {
     s.brightness = 10;
   } else if (s.brightness > 100) {

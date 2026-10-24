@@ -33,9 +33,16 @@ bool frameFinish();
 const char* frameError();
 
 // True while picture mode is on: a picture arrived within
-// SYSOPTV_FRAME_TIMEOUT_MS. While on, the designs must not draw, even if
-// usage data arrives as well. Pictures have priority.
+// SYSOPTV_FRAME_TIMEOUT_MS and picture mode was not ended. Otherwise the
+// firmware shows NO CARRIER.
 bool frameModeActive();
+
+// Ends picture mode at once (POST /api/nocarrier). The screen is no longer
+// valid, so the next picture must be a full one.
+void frameModeEnd();
+
+// True after frameModeEnd() until the next complete picture.
+bool frameEnded();
 
 // Remembers where the last complete picture came from, from the header
 // X-SysopTV-Source. The value may be percent encoded (UTF-8), it is decoded,

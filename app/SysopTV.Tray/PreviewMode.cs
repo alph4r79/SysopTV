@@ -205,6 +205,7 @@ namespace SysopTV.Tray
             bool previousQuiet = Log.Quiet;
             Func<string, TimeSpan, CubeInfo> readInfo = CubesPage.ReadInfo;
             Func<string, string, CubeSettings> readSettings = CubesPage.ReadSettings;
+            Func<BundledFirmware> findFirmware = CubesPage.FindFirmware;
             Func<DateTime?> login = ClaudePage.LoginSource;
             AppPaths.DataDirOption = data;
             Log.Quiet = true;
@@ -213,7 +214,12 @@ namespace SysopTV.Tray
                 DateTime now = DateTime.Now;
                 var cfg = new AppConfig();
                 cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.50", Function = CubeFunction.Claude, Design = "dos", AdminPassword = "example-password" });
-                cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.51", Function = CubeFunction.Shopify, ShopView = ShopBig.ViewBig, BigStyle = "bon", AdminPassword = "example-password" });
+                var shopCube = new CubeEntry { Address = "192.168.178.51", Function = CubeFunction.Shopify, ShopView = ShopBig.ViewBig, BigStyle = "bon", AdminPassword = "example-password" };
+                // The Shopify cube shows Claude Limits in turn, so the pictures show "Im Wechsel zeigen".
+                shopCube.Alternate = true;
+                shopCube.EnsureSecond().Function = CubeFunction.Claude;
+                shopCube.Second.Design = "fallblatt";
+                cfg.Cubes.Add(shopCube);
                 cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.52", Function = CubeFunction.WooCommerce, ShopView = ShopBig.ViewDetails, Design = "dos", AdminPassword = "example-password" });
                 cfg.Shop.Domain = "myshop.myshopify.com";
                 cfg.Shop.DisplayName = "My Shop";
@@ -224,6 +230,7 @@ namespace SysopTV.Tray
                 cfg.Woo.Key = "your-plugin-key";
                 CubesPage.ReadInfo = (address, timeout) => SampleInfo(cfg, address);
                 CubesPage.ReadSettings = (address, password) => SampleSettings(cfg, address);
+                CubesPage.FindFirmware = () => new BundledFirmware { Path = "sysoptv-0.5.0.bin", Version = "0.5.0" };
                 ClaudePage.LoginSource = () => now.AddHours(5).AddMinutes(12);
 
                 var service = new SenderService(cfg, Path.Combine(data, "state.json"));
@@ -297,6 +304,7 @@ namespace SysopTV.Tray
             {
                 CubesPage.ReadInfo = readInfo;
                 CubesPage.ReadSettings = readSettings;
+                CubesPage.FindFirmware = findFirmware;
                 ClaudePage.LoginSource = login;
                 AppPaths.DataDirOption = previousDir;
                 Log.Quiet = previousQuiet;
@@ -343,11 +351,18 @@ namespace SysopTV.Tray
                 Ip = address,
                 Hostname = SampleName(cfg, address) + ".local",
                 DeviceName = "",
-                Version = "0.4.3",
+                Version = "0.5.0",
                 UptimeText = "2 Tage 3 h 41 min",
                 FrameValid = true
             };
-            info.Capabilities.AddRange(new[] { "usage", "settings", "frame" });
+            info.Capabilities.AddRange(new[] { "settings", "frame", "nocarrier" });
+            // The first cube still has an older firmware, so the pictures show "Firmware aktualisieren".
+            if (cfg.Cubes.FindIndex(x => x.Address == address) == 0)
+            {
+                info.Version = "0.4.3";
+                info.Capabilities.Clear();
+                info.Capabilities.AddRange(new[] { "usage", "settings", "frame" });
+            }
             return info;
         }
 
@@ -355,9 +370,6 @@ namespace SysopTV.Tray
         {
             var s = new CubeSettings
             {
-                Design = 2,
-                CycleSeconds = 0,
-                ShowUsed = true,
                 Brightness = 80,
                 NightEnabled = true,
                 NightFrom = "22:00",
@@ -365,10 +377,6 @@ namespace SysopTV.Tray
                 NightBrightness = 10,
                 DeviceName = SampleName(cfg, address)
             };
-            for (int i = 0; i < ClaudeDesigns.FirmwareCount; i++)
-            {
-                s.DesignNames.Add(ClaudeDesigns.All[i].Label);
-            }
             return s;
         }
 

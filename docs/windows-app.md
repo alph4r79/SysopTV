@@ -28,6 +28,8 @@ Download one of these files from the [GitHub Releases](https://github.com/alph4r
 
 The program runs in the notification area of the taskbar, next to the clock. A double-click on its icon opens the window. A right-click opens the menu: current state, "Jetzt senden" (send now), "Würfel im Browser öffnen" (open the cube in the browser), "Fenster öffnen" (open window), "Log öffnen" (open log), "Beenden" (exit).
 
+When the program ends, when you log off or shut down Windows and before the PC goes to sleep, every cube switches to NO CARRIER at once, see [What the cube shows without the program](#what-the-cube-shows-without-the-program). After sleep the program goes on by itself.
+
 The colour of the icon shows the state:
 
 - green: data is being sent
@@ -53,6 +55,8 @@ On the left the list of your cubes:
 - "Von Hand hinzufügen" (add by hand) adds an empty entry, then type the address.
 - "Entfernen" (remove) takes the selected cube out of the list.
 
+Below the buttons the firmware version of the selected cube, for example "Firmware 0.4.3, 0.5.0 verfügbar" (0.5.0 available) or "Firmware 0.5.0, aktuell" (up to date). If the program has a newer firmware, the button "Firmware aktualisieren" (update firmware) appears, see [Firmware update](#firmware-update). "(GitHub)" after the version means it comes from the latest release on GitHub.
+
 On the right the selected cube in two parts.
 
 ### Verbindung und Funktion (connection and function)
@@ -60,6 +64,7 @@ On the right the selected cube in two parts.
 ![Page Würfel with Claude Limits](images/app/app-cubes-claude.png)
 
 - **Adresse** (address): IP address or name of the cube, for example `192.168.178.50`. "Verbindung testen" (test connection) shows the firmware version and the uptime below the list.
+- **Wechsel** (change): "Im Wechsel zeigen" (show in turn), off by default, see [Two functions in turn](#two-functions-in-turn).
 - **Funktion** (function): what the cube shows.
   - **Claude Limits**: your 5 hour session and your weekly limit, see [Claude limits](claude.md).
   - **Shopify**: orders and revenue of your Shopify shop.
@@ -74,7 +79,7 @@ For **Claude Limits**:
 - **Automatisch wechseln** (change automatically): off, every 30 or every 60 seconds through all designs, starting with the chosen one.
 - **Klapp-Animation** (flip animation): appears for the design Fallblatt and with the automatic change. The changing cards flip over in three small steps.
 
-A cube with firmware older than 0.4.0 has no picture mode. The program then sends only the numbers, and the cube shows them in its own design. The list then offers only the six designs of the firmware, and the page says "Firmware zu alt für alle Designs. Bitte die Firmware aktualisieren." (firmware too old for all designs, please update the firmware). Shopify and WooCommerce need firmware 0.4.0 or newer.
+A cube with firmware older than 0.4.0 has no picture mode and gets nothing from the program. The page then says "Firmware zu alt für Bilder. Bitte links „Firmware aktualisieren“ drücken." (firmware too old for pictures, please press "Firmware aktualisieren" on the left).
 
 For **Shopify** and **WooCommerce** choose the **Ansicht** (view) next to the function:
 
@@ -94,6 +99,17 @@ If the access to the shop is not set up yet, a short hint below the function lin
 
 When you change the function or the view, the cube gets a full picture of the new one at once. Fields that do not count for the chosen function are hidden.
 
+### Two functions in turn
+
+![Page Würfel with Shopify and Claude Limits in turn](images/app/app-cubes-shopify.png)
+
+Tick **Im Wechsel zeigen** (show in turn) and set the time, 10 to 120 seconds, 20 by default. The cube then shows a second function in turn with the first one, for example your shop and Claude Limits. The second function is never the same as the first.
+
+- **Bearbeiten** (edit) chooses which of the two functions the fields below show: "1: Shopify" or "2: Claude Limits". Each function has its own design or view.
+- On every change the cube gets a full picture.
+- If one of the two has no data yet (for example the shop is not reachable at the start), the cube shows only the other one until the data is back.
+- The overview shows both, for example "Shopify / Claude Limits (20 s)".
+
 ### Einstellungen im Würfel (settings in the cube)
 
 These settings are stored in the cube itself.
@@ -104,26 +120,60 @@ These settings are stored in the cube itself.
 
 The fields:
 
-- **Ersatzanzeige, wenn der PC nichts schickt** (fall back display when the PC sends nothing): the design of the cube itself, with "verbraucht" or "übrig". The cube shows it only when no pictures come from the program for a few minutes, for example when the PC is off. A cube with Claude Limits and firmware 0.4.2 or newer then shows the last numbers there, otherwise the clock and NO CARRIER.
 - **Helligkeit** (brightness): 10 to 100 %.
 - **Nachtmodus** (night mode): from and to as time, and **Helligkeit nachts** (brightness at night) from 0 to 100 %. 0 switches the display off.
 - **Gerätename** (device name), see [Installation](installation.md#device-name).
 
 A cube with firmware older than 0.4.0 has no interface for these settings. The page then shows the button "Einstellungen am Würfel öffnen" (open the settings of the cube), which opens the web interface of the cube.
 
+Since firmware 0.5.0 the cube draws no designs of its own. Design, change and "verbraucht" or "übrig" of a cube with firmware 0.4.x stay in that cube untouched, the program no longer shows or changes them.
+
+### Firmware update
+
+The program brings the firmware with it (`firmware\sysoptv-<version>.bin` next to `SysopTV.exe`). With the update check on, or after "Jetzt nach Updates suchen" on the page Programm, it also knows the firmware of the latest release on GitHub and takes the newer of the two. A firmware from GitHub is downloaded only when you press "Firmware aktualisieren", checked against `SHA256SUMS.txt` of the release and kept in the folder `firmware` next to `state.json`. With a wrong checksum nothing is put on the cube. Without network, or with the update check off, the firmware that comes with the program counts.
+
+"Firmware aktualisieren" appears only for cubes with SysopTV firmware that is older; the original firmware of GeekMagic is never touched. A new firmware in the release is reported once in the taskbar.
+
+1. Press "Firmware aktualisieren" and confirm the question with the old and the new version.
+2. If no admin password is stored for this cube, or it is wrong, the program asks for it. A password that worked is stored for the cube.
+3. Below the list the program shows the progress: "Lade hoch: 120 von 415 KB" (uploading), then "Warte auf den Neustart" (waiting for the restart).
+4. After the restart the program reads the version again and reports "Firmware 0.5.0 läuft." (firmware 0.5.0 runs).
+
+During the update the cube gets no pictures. Do not cut the power. The upload goes through the same update page of the cube as in the browser.
+
+Possible messages:
+
+- "Würfel nicht erreichbar oder ohne SysopTV-Firmware": the cube does not answer, or it runs the original firmware.
+- "Das Admin-Passwort stimmt nicht. Nichts wurde geändert.": wrong password, nothing was written.
+- "Update abgebrochen: ...": the upload or the writing failed. The old firmware stays, the cube restarts after a few seconds. Try again.
+- "Der Würfel läuft nach dem Neustart weiter mit Firmware ...": the cube came back with the old version.
+- "Der Würfel meldet sich nach dem Update nicht zurück": see [When an update aborts](installation.md#when-an-update-aborts).
+
 ### Several cubes
 
 Every cube in the list gets its own function, design and view. Several cubes side by side work, for example one with Claude Limits and one with your shop. The limits are fetched from Anthropic only once per round, no matter how many cubes show them, and each shop is asked once every 5 minutes.
 
-The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen. After a restart of the cube and at least every 10 minutes the whole picture goes out. While the program runs, it sends a sign of life at least every 60 seconds, so the cube never switches to its fall back display.
+The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen. After a restart of the cube and at least every 10 minutes the whole picture goes out. While the program runs, it sends a sign of life at least every 60 seconds, so the cube never switches to NO CARRIER.
 
 As long as there are no values at all, the cube still gets a picture: a short notice in the colours of the chosen design, for example "Claude-Daten werden geladen", "Shopdaten werden geladen", "Zu viele Anfragen" or "Shop nicht erreichbar" with the time of the next try. Values that are not fresh stay on the screen with a small "Stand HH:MM" (as of).
+
+### What the cube shows without the program
+
+Since firmware 0.5.0 the program draws everything the cube shows. Without pictures the cube shows NO CARRIER with its clock, see [Installation](installation.md#what-the-cube-shows-without-a-pc).
+
+- When the program ends, when Windows logs off or shuts down and before the PC goes to sleep, the program sends NO CARRIER to all cubes at once (`POST /api/nocarrier`), with at most 2 seconds of waiting. After sleep it goes on by itself and every cube gets a full picture.
+- A cube with firmware up to 0.4.x has no such address. It gets a picture "NO CARRIER, PC aus seit HH:MM" (PC off since) and after 3 minutes shows its own display.
+- If the PC simply loses power, the cube switches to NO CARRIER 3 minutes after the last picture.
 
 ## Claude
 
 ![Page Claude](images/app/app-claude.png)
 
-The interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429, the values of session and week, and "Jetzt abfragen" (query now, at most once in 120 seconds). Details in [Claude limits](claude.md).
+The interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429, the values of session and week, and "Jetzt abfragen" (query now, at most once in 120 seconds).
+
+**Benachrichtigen, wenn das Limit knapp wird** (notify when the limit gets close), off by default: a Windows message at the bottom right when the session or the week reaches a threshold of used percent. Choose 70, 80, 90 or 95 % for each, 90 % by default, or "aus" (off). Each limit gives at most one message per threshold and period: the session until its next reset, the week until the week reset. The messages look like "Claude: Session bei 91 %. Reset in 1:12." or "Claude: Woche bei 90 %. Reset Do 23:00." This works whether or not a cube shows Claude Limits.
+
+Details in [Claude limits](claude.md).
 
 ## Shopify
 
@@ -142,22 +192,27 @@ Address of the website, the key of the plugin, the name for the display and "Sho
 ![Page Programm](images/app/app-program.png)
 
 - **Mit Windows starten** (start with Windows): the program starts after every login.
+- **Einmal täglich nach neuen Versionen suchen** (look for new versions once a day), off by default. When on, the program asks GitHub at most once a day for the latest release and looks at the program and the firmware in it. Without network it stays silent. See [Privacy and security](privacy-security.md#update-check).
+- **Jetzt nach Updates suchen** (look for updates now): asks GitHub once, also with the daily check off, and says what it found.
+- **Version X.Y.Z verfügbar** (available): a newer program, as a link to the release page, reported once in the taskbar. For the installed program the button **Jetzt aktualisieren** (update now) appears: it downloads the setup into a temp folder, checks it against `SHA256SUMS.txt`, asks you, sends NO CARRIER to the cubes, runs the setup without windows and ends; afterwards SysopTV starts again. Your settings stay. The setup needs no administrator rights, Windows asks nothing. If the checksum is wrong or `SHA256SUMS.txt` is missing, nothing is run and the downloaded file is deleted.
+- The **portable** program gets only the hint and the link: download the new ZIP from the release page and unpack it over the old folder.
 - **Log-Ordner öffnen** (open log folder): the folder with `app.log`.
 - version, source code and licence
 
 ## Where the program keeps its files
 
 - `%APPDATA%\SysopTV\config.json`: your cubes and settings. API keys, admin passwords, the Shopify access and the WooCommerce key are stored only encrypted for your Windows user.
-- `%LOCALAPPDATA%\SysopTV\state.json`: time of the last query, a pause after error 429 and the last valid values, so a restart neither asks too early nor shows nothing. Never the login of Claude Code.
+- `%APPDATA%\SysopTV\config.bak.json`: the previous `config.json`, copied before every save. If `config.json` cannot be read at the start, the program takes this backup and shows "Die Einstellungen waren beschädigt und wurden aus der Sicherung wiederhergestellt." (the settings were damaged and restored from the backup). If the backup is broken as well, it starts with the defaults; the broken file stays as `config.broken.json`.
+- `%LOCALAPPDATA%\SysopTV\state.json`: time of the last query, a pause after error 429 and the last valid values, so a restart neither asks too early nor shows nothing; which limit messages were shown and when the update check ran last. Never the login of Claude Code.
 - `%LOCALAPPDATA%\SysopTV\app.log`: the log, at most 1 MB, then one backup `app.old.log`.
 
 More in [Privacy and security](privacy-security.md).
 
-**For advanced users:** the option `--data-dir <folder>` or the environment variable `SYSOPTV_DATA_DIR` puts `config.json`, `state.json` and `app.log` into that folder instead. This is meant for trials and tests that must not touch your real settings.
+**For advanced users:** the option `--data-dir <folder>` or the environment variable `SYSOPTV_DATA_DIR` puts `config.json` (with `config.bak.json`), `state.json` and `app.log` into that folder instead. This is meant for trials and tests that must not touch your real settings.
 
 ## Command line
 
-- `SysopTV.exe --once` queries the limits once, sends the numbers to the first cube with Claude Limits and prints the result. It keeps to the 120 seconds after the last query and updates `state.json`. It does not run while the program is running.
+- `SysopTV.exe --once` queries the limits once, sends them as one full picture in the design of the first cube with Claude Limits and prints the result. It keeps to the 120 seconds after the last query and updates `state.json`. It does not run while the program is running.
 - `--device 192.168.178.50` sends to another address for this one run.
 - `SysopTV.exe --preview <folder>` writes every picture design with sample data as PNG files, without network.
 
@@ -168,10 +223,11 @@ Settings of all earlier versions are taken over automatically, nothing is lost:
 - A cube that drew Claude itself ("Claude, Würfel zeichnet selbst" up to 0.6.0) becomes Claude Limits. It gets the design, "verbraucht" or "übrig" and the automatic change the cube showed, as soon as the program reaches it. Until then, and with firmware before 0.3.1, it shows DOS.
 - "Claude als Bild" becomes Claude Limits with the same design.
 - "Shop als Bild" becomes Shopify or WooCommerce after its source, with all settings of the view.
+- The setting "Ersatzanzeige, wenn der PC nichts schickt" (fall back display) of version 0.7.0 is gone: since firmware 0.5.0 the cube shows NO CARRIER with its clock instead.
 
 ## Alternative: the PowerShell script
 
-Instead of the program you can use the older and smaller sender `sender/sysoptv-sender.ps1`. It only sends the Claude numbers, so the cube shows them in its own design. Use either the program or the script, never both: two senders would ask for the limits twice.
+Instead of the program you can use the older and smaller sender `sender/sysoptv-sender.ps1`. It only sends the Claude numbers, so the cube shows them in its own design. **It works only with firmware up to 0.4.x:** since firmware 0.5.0 the cube takes no numbers (`/api/usage` is gone) and answers the script with 404. Use either the program or the script, never both: two senders would ask for the limits twice.
 
 1. Copy the folder `sender` to your PC, for example to `C:\Path\to\sender\`.
 2. Open PowerShell (the line starts with `PS`) and run a single test with the address of your cube:

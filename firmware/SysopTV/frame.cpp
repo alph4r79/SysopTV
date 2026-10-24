@@ -35,6 +35,7 @@ static const char* error = "";
 static bool modeOn = false;
 static bool seen = false;
 static bool valid = false;        // the whole screen shows a picture from the PC
+static bool ended = false;        // the PC ended picture mode, see frameModeEnd()
 
 const char FRAME_FULL_REQUIRED[] = "full_frame_required";
 static unsigned long lastFrame = 0;
@@ -183,6 +184,7 @@ bool frameFinish() {
   }
   modeOn = true;
   seen = true;
+  ended = false;
   lastFrame = millis();
   if (fullScreen()) {
     valid = true;
@@ -204,6 +206,16 @@ void frameAbort() {
 
 const char* frameError() {
   return error;
+}
+
+void frameModeEnd() {
+  modeOn = false;
+  valid = false;
+  ended = true;
+}
+
+bool frameEnded() {
+  return ended;
 }
 
 bool frameModeActive() {

@@ -1,14 +1,16 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Display driver, backlight and the system screens (boot, WLAN, setup
-// hotspot, update). The built-in TFT_eSPI fonts have no
-// umlauts, texts that need them use the VGA font from view_common.
+// Display driver, backlight and everything the firmware draws by itself:
+// the system screens (boot, WLAN, setup hotspot, update) and NO CARRIER.
+// The built-in TFT_eSPI fonts have no umlauts, texts that need them use the
+// VGA font (vga.cpp).
 
 #include "screen.h"
 #include "config.h"
 #include "frame.h"
-#include "view_common.h"
+#include "vga.h"
+#include <string.h>
 #include <TFT_eSPI.h>
 
 static TFT_eSPI tft;
@@ -175,5 +177,38 @@ void screenUpdateResult(bool ok, const String& message) {
     center(shorten(message, 28), 118, 2, cDim);
     center("Alte Firmware bleibt", 150, 2, cAmber);
     center("Neustart ...", 178, 2, cDim);
+  }
+}
+
+// Copies text into cache and returns true if it was different.
+static bool changed(char* cache, size_t size, const char* text) {
+  if (strncmp(cache, text, size) == 0) {
+    return false;
+  }
+  strncpy(cache, text, size - 1);
+  cache[size - 1] = '\0';
+  return true;
+}
+
+void screenNoCarrier(bool full, const char* clock, const char* lastData, const char* ip) {
+  static char shownClock[6];
+  static char shownLast[32];
+  static char shownIp[16];
+  frameInvalidate();
+  if (full) {
+    tft.fillScreen(cBack);
+    shownClock[0] = shownLast[0] = shownIp[0] = '\0';
+    vgaText("NO CARRIER", 120, 140, ALIGN_CENTER, 2, cAmber, cBack);
+  }
+  // Scale 5: 40 x 80 pixels per character, "14:09" is 200 pixels wide.
+  if (changed(shownClock, sizeof(shownClock), clock)) {
+    vgaText(clock, 120, 40, ALIGN_CENTER, 5, cAmber, cBack, 220);
+  }
+  if (changed(shownLast, sizeof(shownLast), lastData)) {
+    vgaText(lastData, 120, 180, ALIGN_CENTER, 1, cDim, cBack, 220);
+  }
+  // IP address small at the bottom, so the cube stays findable without PC.
+  if (changed(shownIp, sizeof(shownIp), ip)) {
+    vgaText(ip, 120, 220, ALIGN_CENTER, 1, cDim, cBack, 160);
   }
 }

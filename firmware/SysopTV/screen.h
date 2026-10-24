@@ -6,7 +6,7 @@
 
 class TFT_eSPI;
 
-// The display driver, for the designs (view_*.cpp).
+// The display driver, for the VGA text and the picture decoder.
 TFT_eSPI& screenTft();
 
 void screenBegin();
@@ -22,3 +22,7 @@ void screenSetup(const char* apName);
 void screenUpdateStart();
 void screenUpdateProgress(size_t bytes);
 void screenUpdateResult(bool ok, const String& message);
+// Shown when no picture arrives: big clock, "NO CARRIER", when the last
+// picture came and the IP address. full clears the screen first, otherwise
+// only the texts that changed are redrawn.
+void screenNoCarrier(bool full, const char* clock, const char* lastData, const char* ip);

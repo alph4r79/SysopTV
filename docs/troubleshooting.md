@@ -15,29 +15,30 @@ You need:
 - The display of the cube shows its IP address after a start ("Bereit") and on the display without PC.
 - Give the cube a fixed IP address in your router, so the address does not change.
 
-## The cube suddenly shows another picture
+## The cube shows NO CARRIER
 
-The cube shows its own design, the **Ersatzanzeige, wenn der PC nichts schickt** (fall back display), when no pictures come from the program for a few minutes. When the program stops sending, for example because the PC is off or the program was closed, the cube keeps the last picture for up to 3 minutes, then it switches.
+The cube shows a big clock, "NO CARRIER" and below it "letztes Bild HH:MM" (last picture) or "noch kein Bild" (no picture yet), and its IP address. Since firmware 0.5.0 that is the only thing the cube draws itself. It does that:
+
+- 120 seconds after a start without any picture from the program,
+- 3 minutes after the last picture,
+- at once when the program ends, Windows logs off or shuts down, or the PC goes to sleep.
+
+What to check:
 
 - Is the program running? Its icon must be in the notification area.
 - Is the cube reachable? The page "Übersicht" of the program shows the state of every cube.
-- A cube with Claude Limits and firmware 0.4.2 or newer shows the last numbers in its fall back display. Other cubes show the clock and NO CARRIER.
+- If an API key is set in the cube, the same key must be entered in the program, see [Privacy and security](privacy-security.md#api-key-of-the-cube).
+- The clock shows `--:--`: the cube has no internet time yet (pool.ntp.org). The night mode needs it as well.
 
-You choose the fall back display on the page "Würfel" under "Einstellungen im Würfel", see [Windows app](windows-app.md#einstellungen-im-würfel-settings-in-the-cube).
+A cube with firmware up to 0.4.x shows its own display instead after 3 minutes. Update it with "Firmware aktualisieren" on the page "Würfel", see [Windows app](windows-app.md#firmware-update).
 
-## The web interface of the cube says "Keine Daten vom PC"
+## The web interface of the cube says "Noch kein Bild vom PC"
 
-The cube got neither pictures nor numbers from the PC for a while. Check that the program runs, that the cube is in its list with the right address, and that the page "Übersicht" of the program shows "ok" for it. If an API key is set in the cube, the same key must be entered in the program, see [Privacy and security](privacy-security.md#api-key-of-the-cube).
+The cube got no picture since its start. Check that the program runs, that the cube is in its list with the right address, and that the page "Übersicht" of the program shows "ok" for it.
 
-## The cube shows NO CARRIER
+## The cube shows "Keine Daten von Anthropic"
 
-The cube shows a big clock, "NO CARRIER" and below it "letzte Daten HH:MM" (last data) or "noch keine Daten" (no data yet), and its IP address. It does that:
-
-- 120 seconds after a start without any data from the PC,
-- when no data came for 10 minutes,
-- when the PC reports that it cannot reach Anthropic: after 3 failed queries in a row, or when the last valid values are older than 15 minutes.
-
-Check that the program runs, and look at the page "Claude" of the program for a pause after error 429 or an expired login.
+This is a picture of the program, in the colours of the design. It appears when the program cannot reach Anthropic: after 3 failed queries in a row, or when the last valid values are older than 15 minutes. Look at the page "Claude" of the program for a pause after error 429 or an expired login.
 
 ## Error 429 (too many requests)
 
@@ -51,6 +52,30 @@ The login of Claude Code has run out. Use Claude Code for a moment, then the val
 
 The old sender `sysoptv-sender.ps1` runs next to the program and asks for the limits a second time. That can lead to error 429. The program offers to move its shortcut out of the startup folder. End a running script in the Task Manager (powershell.exe) or restart the PC. The program checks every 10 minutes and shows the hint in the status line until the script is gone.
 
+## The PowerShell script gets error 404
+
+Since firmware 0.5.0 the cube takes no numbers any more, only pictures. The old sender `sysoptv-sender.ps1` sends numbers to `/api/usage`, which no longer exists. Use the Windows program instead, see [Windows app](windows-app.md).
+
+## "Die Einstellungen waren beschädigt und wurden aus der Sicherung wiederhergestellt"
+
+The program could not read its `config.json` at the start (for example after a crash of the PC while saving) and took the backup `config.bak.json` from before the last save. Check your cubes and settings once. The damaged file stays as `config.broken.json` next to it. If the backup was damaged as well, the program starts with the defaults, see [Windows app](windows-app.md#where-the-program-keeps-its-files).
+
+## "Die Prüfsumme ... stimmt nicht" or "Im Release fehlt SHA256SUMS.txt"
+
+A file from GitHub (setup or firmware) did not match the checksum in `SHA256SUMS.txt` of the release, or the release has no such file. The program then uses nothing and deletes the download. Try again later; the firmware that comes with the program still works. If it stays like that, download the files by hand from the release page.
+
+## "GitHub ist nicht erreichbar"
+
+"Jetzt nach Updates suchen" got no answer from GitHub. Check the internet connection. The daily check stays silent in that case and tries again an hour later.
+
+## The program does not start again after "Jetzt aktualisieren"
+
+Start it from the start menu. Your settings stay in `config.json`. If Windows blocked the setup, download `sysoptv-app-<version>-setup.exe` from the release page and run it yourself.
+
+## A firmware update aborted
+
+See [When an update aborts](installation.md#when-an-update-aborts).
+
 ## Forgotten password
 
 Unplug the cube three times in a row, each time within 10 seconds after plugging it in. On the fourth start the admin password, the API key and all settings are reset. The WLAN stays. The display shows "Passwort zurückgesetzt" (password reset) for 3 seconds. Only starts after plugging in count, crashes and restarts do not.
@@ -59,7 +84,9 @@ Then set a new admin password, see [Installation](installation.md#4-set-the-admi
 
 ## Rescue mode
 
-If the firmware crashes three times in a row, SysopTV starts in rescue mode. The start screen says "RETTUNGSMODUS". It ignores the settings and only offers WLAN, the overview and the update page, so you can install a working firmware. The update page asks for the admin password, if it can still be read. After 60 seconds without a crash the counter starts again.
+If the firmware crashes three times in a row, SysopTV starts in rescue mode. The start screen says "RETTUNGSMODUS". It ignores the settings and only offers WLAN, the overview and the update page, so you can install a working firmware, see [When an update aborts](installation.md#when-an-update-aborts). The update page asks for the admin password, if it can still be read. After 60 seconds without a crash the counter starts again.
+
+If the update page cannot be reached at all, the only way back is a USB serial adapter: open the case (two screws at the bottom), solder the adapter on and hold GPIO0 to ground while switching on.
 
 ## Windows warns about an unknown publisher
 

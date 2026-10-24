@@ -1,14 +1,16 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Page "Würfel": the list of cubes on the left, the selected cube on the
-// right in two parts. "Verbindung und Funktion" is stored in the program and
-// saved as soon as a field is left. The function is Claude Limits, Shopify or
-// WooCommerce; the program draws every picture itself, cubes without picture
-// mode (firmware before 0.4.0) get only the numbers. "Einstellungen im Würfel"
-// is stored in the cube: loaded on its own when an admin password is set, and
-// written only with "Auf dem Würfel speichern", which stays locked until a
-// load worked.
+// Page "Würfel": the list of cubes on the left with the firmware version and
+// "Firmware aktualisieren", the selected cube on the right in two parts.
+// "Verbindung und Funktion" is stored in the program and saved as soon as a
+// field is left. The function is Claude Limits, Shopify or WooCommerce, with
+// "Im Wechsel zeigen" a second one in turn; the view fields below edit the
+// function chosen under "Bearbeiten". The program draws every picture itself,
+// cubes without picture mode (firmware before 0.4.0) need a firmware update.
+// "Einstellungen im Würfel" is stored in the cube: loaded on its own when an
+// admin password is set, and written only with "Auf dem Würfel speichern",
+// which stays locked until a load worked.
 
 using System;
 using System.Collections.Generic;
@@ -25,8 +27,7 @@ namespace SysopTV.Tray
     {
         private static readonly string[] CycleLabels = { "aus", "alle 30 Sekunden", "alle 60 Sekunden" };
 
-        internal const string OldFirmwareText = "Firmware zu alt für alle Designs. Bitte die Firmware aktualisieren.";
-        internal const string FallbackText = "Zeigt der Würfel nur, wenn einige Minuten keine Bilder vom Programm kommen.";
+        internal const string OldFirmwareText = "Firmware zu alt für Bilder. Bitte links „Firmware aktualisieren“ drücken.";
 
         // List
         private readonly ListBox list = new ListBox { Width = 170, Height = 150, IntegralHeight = false };
@@ -35,6 +36,8 @@ namespace SysopTV.Tray
         private readonly Button removeButton = new Button { Text = "Entfernen" };
         private readonly ListBox found = new ListBox { Width = 170, Height = 80, IntegralHeight = false, Visible = false };
         private readonly Label listStatus = new Label { AutoSize = true, MaximumSize = new Size(170, 0), ForeColor = SystemColors.GrayText };
+        private readonly Label firmwareLabel = new Label { AutoSize = true, MaximumSize = new Size(170, 0), Margin = new Padding(0, 10, 0, 0) };
+        private readonly Button updateButton = new Button { Text = "Firmware aktualisieren", Width = 170, Height = 28, Margin = new Padding(0, 4, 0, 0), Visible = false };
 
         // Verbindung und Funktion (stored in the program)
         private readonly TableLayoutPanel connGrid = Grid();
@@ -58,14 +61,19 @@ namespace SysopTV.Tray
         private readonly CheckBox bigFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
         private readonly Label styleNote = new Label { AutoSize = true, MaximumSize = new Size(200, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(8, 0, 0, 0), Visible = false };
         private readonly Label viewCaption = Caption("Ansicht");
-        private Control designRow, modeRow, cycleRow, periodRow, contentRow, styleRow;
+        private readonly CheckBox alternate = new CheckBox { Text = "Im Wechsel zeigen, alle", AutoSize = true, Margin = new Padding(0, 5, 4, 0) };
+        private readonly NumericUpDown alternateSeconds = new NumericUpDown
+        {
+            Minimum = CubeEntry.MinAlternateSeconds, Maximum = CubeEntry.MaxAlternateSeconds, Value = CubeEntry.DefaultAlternateSeconds, Width = 55
+        };
+        // Which function the view fields below edit. A list, not two radio
+        // buttons: those check themselves when they get the focus.
+        private readonly ComboBox editWhich = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+        private Control designRow, modeRow, cycleRow, periodRow, contentRow, styleRow, editRow;
 
         // Einstellungen im Würfel (stored in the cube)
         private readonly TableLayoutPanel cubeGrid = Grid();
         private readonly Panel browserPanel = new Panel { AutoSize = true, Visible = false };
-        private readonly ComboBox fwDesign = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
-        private readonly RadioButton fwUsed = new RadioButton { Text = "verbraucht", AutoSize = true, Margin = new Padding(8, 3, 0, 0) };
-        private readonly RadioButton fwLeft = new RadioButton { Text = "übrig", AutoSize = true };
         private readonly NumericUpDown brightness = new NumericUpDown { Minimum = 10, Maximum = 100, Increment = 5, Width = 60 };
         private readonly CheckBox night = new CheckBox { Text = "an", AutoSize = true, Margin = new Padding(0, 5, 8, 0) };
         private readonly TextBox nightFrom = new TextBox { Width = 50 };
@@ -79,8 +87,11 @@ namespace SysopTV.Tray
         // Reading the cube; the pictures of the documentation put samples here, so they need no network.
         internal static Func<string, TimeSpan, CubeInfo> ReadInfo = Cube.GetInfo;
         internal static Func<string, string, CubeSettings> ReadSettings = Cube.GetSettings;
+        // The firmware that comes with the program; the offline tests put their own here.
+        internal static Func<BundledFirmware> FindFirmware = BundledFirmware.FindLocal;
 
         private CubeEntry selected;
+        private bool editingSecond;       // the view fields show the second function
         private CubeSettings loaded;      // values of the selected cube, null until a load worked
         private int loadToken;            // a newer load makes older answers worthless
         private bool busy;
@@ -101,7 +112,10 @@ namespace SysopTV.Tray
                 b.Margin = new Padding(0, 4, 0, 0);
                 left.Controls.Add(b);
             }
-            // The result of "Verbindung testen" stands below the list.
+            // Firmware of the selected cube and the update, then the result of
+            // "Verbindung testen" or of the update.
+            left.Controls.Add(firmwareLabel);
+            left.Controls.Add(updateButton);
             left.Controls.Add(cubeStatus);
             left.Controls.Add(found);
             left.Controls.Add(listStatus);
@@ -114,6 +128,9 @@ namespace SysopTV.Tray
             bigStyle.Items.AddRange(ShopBig.Styles);
 
             AddRow(connGrid, "Adresse (IP oder Name)", Row(address, testButton));
+            AddRow(connGrid, "Wechsel", Row(alternate, alternateSeconds, Caption("Sekunden")));
+            editRow = editWhich;
+            AddRow(connGrid, "Bearbeiten", editRow);
             // Function and view share one row, so the page fits without scrolling.
             AddRow(connGrid, "Funktion", Row(function, viewCaption, shopView));
             AddRow(connGrid, null, functionNote);
@@ -132,20 +149,6 @@ namespace SysopTV.Tray
             AddRow(connGrid, "API-Schlüssel (optional)", apiKey);
             AddRow(connGrid, "Admin-Passwort", adminPassword);
 
-            // The design of the cube itself only shows when the pictures stop.
-            var fallbackCaption = Caption("Ersatzanzeige, wenn der PC nichts schickt");
-            fallbackCaption.MaximumSize = new Size(170, 0);
-            int fallbackRow = cubeGrid.RowCount;
-            cubeGrid.RowCount = fallbackRow + 1;
-            cubeGrid.Controls.Add(fallbackCaption, 0, fallbackRow);
-            cubeGrid.Controls.Add(Row(fwDesign, fwUsed, fwLeft), 1, fallbackRow);
-            var fallbackNote = Note(FallbackText);
-            fallbackNote.MaximumSize = new Size(480, 0);
-            fallbackNote.Margin = new Padding(0, 0, 0, 6);
-            int noteRow = cubeGrid.RowCount;
-            cubeGrid.RowCount = noteRow + 1;
-            cubeGrid.Controls.Add(fallbackNote, 0, noteRow);
-            cubeGrid.SetColumnSpan(fallbackNote, 2);
             AddRow(cubeGrid, "Helligkeit", Row(brightness, Caption("%")));
             AddRow(cubeGrid, "Nachtmodus", Row(night, Caption("von"), nightFrom, Caption("bis"), nightTo));
             AddRow(cubeGrid, "Helligkeit nachts", Row(nightBrightness, Caption("%")));
@@ -190,8 +193,34 @@ namespace SysopTV.Tray
                 Action<string> openPage = Ctx.OpenPage;
                 if (openPage != null && selected != null)
                 {
-                    openPage(CubeFunction.Label(selected.Function));
+                    openPage(CubeFunction.Label(Editing.Function));
                 }
+            };
+            updateButton.Click += async (s, e) => await UpdateFirmware();
+            alternate.CheckedChanged += (s, e) =>
+            {
+                if (filling)
+                {
+                    return;
+                }
+                Commit();
+                if (!alternate.Checked)
+                {
+                    editingSecond = false;
+                }
+                FillFields();
+            };
+            alternateSeconds.ValueChanged += (s, e) => Commit();
+            editWhich.SelectedIndexChanged += (s, e) =>
+            {
+                if (filling)
+                {
+                    return;
+                }
+                // Keep what the fields show for the function edited so far, then switch.
+                Commit();
+                editingSecond = editWhich.SelectedIndex == 1;
+                FillFields();
             };
 
             // Program settings: saved when a field is left or a choice changes.
@@ -257,27 +286,21 @@ namespace SysopTV.Tray
             return loaded != null && !busy;
         }
 
-        // The functions a cube can have: Shopify and WooCommerce need picture
-        // mode. A cube that is not reached yet gets all three. A shop cube keeps
-        // its function in the list, so nothing changes without being chosen.
-        internal static DesignInfo[] FunctionsFor(CubeInfo info, CubeEntry c)
+        // The functions to choose: all three for the first function, for the
+        // second all but the one of the first.
+        internal static DesignInfo[] FunctionsFor(CubeEntry cube, bool second)
         {
-            if (info == null || info.CanFrame || c.IsShop)
+            if (!second)
             {
                 return CubeFunction.All;
             }
-            return new[] { CubeFunction.All[0] };
+            return CubeFunction.All.Where(f => f.Id != cube.Function).ToArray();
         }
 
-        // The designs for Claude Limits: all ten with picture mode, otherwise
-        // the six the firmware draws itself.
-        internal static DesignInfo[] ClaudeDesignsFor(CubeInfo info)
+        // The function the view fields edit now.
+        private CubeEntry Editing
         {
-            if (info != null && !info.CanFrame)
-            {
-                return ClaudeDesigns.All.Take(ClaudeDesigns.FirmwareCount).ToArray();
-            }
-            return ClaudeDesigns.All;
+            get { return editingSecond && selected != null && selected.Alternate ? selected.EnsureSecond() : selected; }
         }
 
         // The hint below the function, null if there is none. Link is the page
@@ -366,18 +389,27 @@ namespace SysopTV.Tray
             {
                 c.Address = addr;
             }
-            c.Function = Picked(function, c.Function);
-            c.ShowUsed = showUsed.Checked;
-            c.CycleSeconds = CubeEntry.CycleChoices[Math.Max(0, cycle.SelectedIndex)];
-            if (c.IsShop)
+            // The view fields belong to the function edited now.
+            CubeEntry v = Editing;
+            v.Function = Picked(function, v.Function);
+            v.ShowUsed = showUsed.Checked;
+            v.CycleSeconds = CubeEntry.CycleChoices[Math.Max(0, cycle.SelectedIndex)];
+            if (v.IsShop)
             {
-                c.ShopView = Picked(shopView, c.ShopView);
-                c.BigPeriod = Picked(period, c.BigPeriod);
-                c.BigContent = Picked(content, c.BigContent);
-                c.BigStyle = Picked(bigStyle, c.BigStyle);
-                c.PeriodCycleSeconds = CubeEntry.CycleChoices[Math.Max(0, periodCycle.SelectedIndex)];
+                v.ShopView = Picked(shopView, v.ShopView);
+                v.BigPeriod = Picked(period, v.BigPeriod);
+                v.BigContent = Picked(content, v.BigContent);
+                v.BigStyle = Picked(bigStyle, v.BigStyle);
+                v.PeriodCycleSeconds = CubeEntry.CycleChoices[Math.Max(0, periodCycle.SelectedIndex)];
             }
-            c.Animate = claudeFlip.Checked;
+            v.Animate = claudeFlip.Checked;
+            c.Alternate = alternate.Checked;
+            c.AlternateSeconds = (int)alternateSeconds.Value;
+            if (c.Alternate || c.Second != null)
+            {
+                // The second function never equals the first.
+                c.EnsureSecond();
+            }
             if (apiKey.Text.Trim() != c.ApiKey)
             {
                 c.ApiKey = apiKey.Text.Trim();
@@ -405,9 +437,10 @@ namespace SysopTV.Tray
                 return;
             }
             var d = design.SelectedItem as DesignInfo;
-            if (d != null && selected.Designs.Contains(d) && d.Id != selected.Design)
+            CubeEntry v = Editing;
+            if (d != null && v.Designs.Contains(d) && d.Id != v.Design)
             {
-                selected.Design = d.Id;
+                v.Design = d.Id;
                 selected.AdoptCubeDesign = false;
                 Ctx.Save();
             }
@@ -416,7 +449,8 @@ namespace SysopTV.Tray
         private static string Snapshot(CubeEntry c)
         {
             return string.Join("|", c.Address, c.Function, c.Design, c.ShowUsed, c.CycleSeconds, c.ApiKeyProtected, c.AdminPasswordProtected,
-                               c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
+                               c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate,
+                               c.Alternate, c.AlternateSeconds, c.Second != null ? Snapshot(c.Second) : "");
         }
 
         private static string Picked(ComboBox box, string current)
@@ -432,17 +466,24 @@ namespace SysopTV.Tray
 
         private void SelectCube()
         {
-            Commit();
             var item = list.SelectedItem as Item;
+            // RefreshList() after a save selects the same cube again: nothing to do.
+            if (item != null && item.Cube == selected)
+            {
+                return;
+            }
+            Commit();
             selected = item != null ? item.Cube : null;
+            editingSecond = false;
             loaded = null;
             loadToken++;
             bool on = selected != null;
-            foreach (Control c in new Control[] { address, function, design, showUsed, showLeft, cycle, apiKey, adminPassword, testButton, removeButton, reloadButton })
+            foreach (Control c in new Control[] { address, alternate, alternateSeconds, function, design, showUsed, showLeft, cycle, apiKey, adminPassword, testButton, removeButton, reloadButton })
             {
                 c.Enabled = on;
             }
             cubeStatus.Text = "";
+            ShowFirmware(null);
             UpdateSaveButton();
             if (!on)
             {
@@ -453,6 +494,7 @@ namespace SysopTV.Tray
             FillFields();
             CubeInfo info = InfoOf(selected);
             ShowCubeArea(info);
+            ShowFirmware(info);
             ClearCubeFields();
             var _ = LoadCubeSettings();
             if (info == null && selected.Address.Length > 0)
@@ -461,23 +503,32 @@ namespace SysopTV.Tray
             }
         }
 
-        // The stored values of the selected cube into the fields.
+        // The stored values of the selected cube into the fields; the view
+        // fields from the function edited now.
         private void FillFields()
         {
             filling = true;
             address.Text = selected.Address;
             apiKey.Text = selected.ApiKey;
             adminPassword.Text = selected.AdminPassword;
-            showUsed.Checked = selected.ShowUsed;
-            showLeft.Checked = !selected.ShowUsed;
-            cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.CycleSeconds));
-            Pick(shopView, ShopBig.Views, selected.ShopView);
-            Pick(period, ShopBig.Periods, selected.BigPeriod);
-            Pick(content, ShopBig.Contents, selected.BigContent);
-            Pick(bigStyle, ShopBig.Styles, selected.BigStyle);
-            periodCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.PeriodCycleSeconds));
-            claudeFlip.Checked = bigFlip.Checked = selected.Animate;
-            FillFunctions(InfoOf(selected));
+            alternate.Checked = selected.Alternate;
+            alternateSeconds.Value = Math.Max(alternateSeconds.Minimum, Math.Min(alternateSeconds.Maximum, selected.AlternateSeconds));
+            if (!selected.Alternate)
+            {
+                editingSecond = false;
+            }
+            CubeEntry v = Editing;
+            FillEditWhich();
+            showUsed.Checked = v.ShowUsed;
+            showLeft.Checked = !v.ShowUsed;
+            cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, v.CycleSeconds));
+            Pick(shopView, ShopBig.Views, v.ShopView);
+            Pick(period, ShopBig.Periods, v.BigPeriod);
+            Pick(content, ShopBig.Contents, v.BigContent);
+            Pick(bigStyle, ShopBig.Styles, v.BigStyle);
+            periodCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, v.PeriodCycleSeconds));
+            claudeFlip.Checked = bigFlip.Checked = v.Animate;
+            FillFunctions();
             filling = false;
             ShowFunctionRows();
         }
@@ -499,12 +550,28 @@ namespace SysopTV.Tray
             }
         }
 
-        private void FillFunctions(CubeInfo info)
+        // "1: Claude Limits" and "2: Shopify", the function edited now chosen.
+        private void FillEditWhich()
         {
-            DesignInfo[] list = FunctionsFor(info, selected);
+            bool wasFilling = filling;
+            filling = true;
+            string second = selected.Second != null ? selected.Second.Function : CubeEntry.OtherFunction(selected.Function);
+            string[] items = { "1: " + CubeFunction.Label(selected.Function), "2: " + CubeFunction.Label(second) };
+            if (editWhich.Items.Count != 2 || (string)editWhich.Items[0] != items[0] || (string)editWhich.Items[1] != items[1])
+            {
+                editWhich.Items.Clear();
+                editWhich.Items.AddRange(items);
+            }
+            editWhich.SelectedIndex = editingSecond ? 1 : 0;
+            filling = wasFilling;
+        }
+
+        private void FillFunctions()
+        {
+            DesignInfo[] list = FunctionsFor(selected, Editing != selected);
             function.Items.Clear();
             function.Items.AddRange(list);
-            Pick(function, list, selected.Function);
+            Pick(function, list, Editing.Function);
         }
 
         private static void ShowRow(TableLayoutPanel grid, Control c, bool visible)
@@ -525,28 +592,32 @@ namespace SysopTV.Tray
                 return;
             }
             CubeInfo info = InfoOf(selected);
-            bool claude = !selected.IsShop;
-            bool big = selected.ShopBigView;
+            CubeEntry v = Editing;
+            bool claude = !v.IsShop;
+            bool big = v.ShopBigView;
             bool wasFilling = filling;
             filling = true;
-            DesignInfo[] designs = claude ? ClaudeDesignsFor(info) : ShopDesigns.All;
+            DesignInfo[] designs = claude ? ClaudeDesigns.All : ShopDesigns.All;
             design.Items.Clear();
             design.Items.AddRange(designs);
-            design.SelectedItem = designs.FirstOrDefault(d => d.Id == selected.DesignOrDefault)
+            design.SelectedItem = designs.FirstOrDefault(d => d.Id == v.DesignOrDefault)
                                   ?? designs.FirstOrDefault(d => d.Id == ClaudeDesigns.Default) ?? designs[0];
             filling = wasFilling;
             string link;
-            string hint = FunctionHint(info, selected, Ctx.Config, out link);
+            string hint = FunctionHint(info, v, Ctx.Config, out link);
             int linkStart = link != null ? hint.IndexOf("Seite", StringComparison.Ordinal) : -1;
             int linkLength = linkStart >= 0 ? hint.Length - linkStart : 0;
             // Styles with several periods: period and content do not count, they stay stored.
-            string style = Picked(bigStyle, selected.BigStyle);
+            string style = Picked(bigStyle, v.BigStyle);
             bool allPeriods = big && ShopBig.ShowsAllPeriods(style);
             styleNote.Text = allPeriods ? ShopBig.AllPeriodsHint(style) : "";
             styleNote.Visible = allPeriods;
             functionNote.Text = hint ?? "";
             functionNote.LinkArea = linkStart >= 0 ? new LinkArea(linkStart, linkLength) : new LinkArea(0, 0);
+            FillEditWhich();
             SuspendLayout();
+            ShowRow(connGrid, editRow, selected.Alternate);
+            alternateSeconds.Enabled = selected.Alternate;
             ShowRow(connGrid, functionNote, hint != null);
             EnableRow(connGrid, periodRow, !allPeriods);
             EnableRow(connGrid, contentRow, !allPeriods);
@@ -579,7 +650,7 @@ namespace SysopTV.Tray
                 return;
             }
             var d = design.SelectedItem as DesignInfo;
-            bool claudePictures = !selected.IsShop && design.Items.Count > ClaudeDesigns.FirmwareCount;
+            bool claudePictures = !Editing.IsShop;
             claudeFlip.Visible = claudePictures && ((d != null && d.Id == "fallblatt") || cycle.SelectedIndex > 0);
             var st = bigStyle.SelectedItem as DesignInfo;
             bigFlip.Visible = st != null && st.Id == "fallblatt";
@@ -594,23 +665,8 @@ namespace SysopTV.Tray
             settingsStatus.Visible = api;
         }
 
-        // Design names of the cube, or the built-in list, never an empty list.
-        internal static string[] DesignNames(CubeSettings s)
-        {
-            if (s != null && s.DesignNames.Count > 0)
-            {
-                return s.DesignNames.ToArray();
-            }
-            return ClaudeDesigns.All.Take(ClaudeDesigns.FirmwareCount).Select(d => d.Label).ToArray();
-        }
-
         private void ClearCubeFields()
         {
-            fwDesign.Items.Clear();
-            fwDesign.Items.AddRange(DesignNames(null));
-            fwDesign.SelectedIndex = 0;
-            fwUsed.Checked = true;
-            fwLeft.Checked = false;
             night.Checked = false;
             nightFrom.Text = nightTo.Text = deviceName.Text = "";
         }
@@ -751,12 +807,10 @@ namespace SysopTV.Tray
                 RefreshList();
                 Ctx.Save();
             }
-            cubeStatus.Text = "Firmware " + info.Version + ", Laufzeit " + info.UptimeText + (info.Rescue ? ", Rettungsmodus" : "");
-            filling = true;
-            FillFunctions(info);
-            filling = false;
+            cubeStatus.Text = "Erreicht, Laufzeit " + info.UptimeText + (info.Rescue ? ", Rettungsmodus" : "");
             ShowFunctionRows();
             ShowCubeArea(info);
+            ShowFirmware(info);
         }
 
         private void OpenBrowser(string path)
@@ -829,11 +883,6 @@ namespace SysopTV.Tray
         private void ShowLoaded(CubeSettings s)
         {
             loaded = s;
-            fwDesign.Items.Clear();
-            fwDesign.Items.AddRange(DesignNames(s));
-            fwDesign.SelectedIndex = Math.Min(Math.Max(0, s.Design), fwDesign.Items.Count - 1);
-            fwUsed.Checked = s.ShowUsed;
-            fwLeft.Checked = !s.ShowUsed;
             brightness.Value = Math.Min(100, Math.Max(10, s.Brightness));
             night.Checked = s.NightEnabled;
             nightFrom.Text = s.NightFrom;
@@ -852,10 +901,6 @@ namespace SysopTV.Tray
             }
             var s = new CubeSettings
             {
-                // The change of the cube is not shown here: the fall back keeps what the cube has.
-                Design = fwDesign.SelectedIndex,
-                CycleSeconds = loaded.CycleSeconds,
-                ShowUsed = fwUsed.Checked,
                 Brightness = (int)brightness.Value,
                 NightEnabled = night.Checked,
                 NightFrom = nightFrom.Text.Trim(),
@@ -896,6 +941,161 @@ namespace SysopTV.Tray
                     RefreshList();
                     Ctx.Save();
                 }
+            }
+        }
+
+        // ---- firmware update ----
+
+        // "Firmware 0.4.3" below the list, and the button if the program has a
+        // newer one. Only for cubes that answer as SysopTV.
+        // The newest firmware: local, or from the GitHub release while updates may be used.
+        private BundledFirmware CurrentFirmware()
+        {
+            return BundledFirmware.Best(FindFirmware(), Ctx.Service.UsableRelease);
+        }
+
+        private void ShowFirmware(CubeInfo info)
+        {
+            BundledFirmware fw = CurrentFirmware();
+            if (info == null)
+            {
+                firmwareLabel.Text = selected != null ? "Firmware: unbekannt" : "";
+                updateButton.Visible = false;
+                return;
+            }
+            bool older = fw != null && fw.NewerThan(info);
+            firmwareLabel.Text = "Firmware " + info.Version + (older ? ", " + fw.Version + " verfügbar" + (fw.FromGitHub ? " (GitHub)" : "") : fw != null ? ", aktuell" : "");
+            updateButton.Visible = older;
+            updateButton.Enabled = !busy;
+        }
+
+        private async Task UpdateFirmware()
+        {
+            Commit();
+            CubeEntry c = selected;
+            BundledFirmware fw = CurrentFirmware();
+            if (c == null || fw == null || busy)
+            {
+                return;
+            }
+            updateButton.Enabled = false;
+            cubeStatus.Text = "Prüfe den Würfel ...";
+            CubeInfo info = await Task.Run(() => ReadInfo(c.Address, TimeSpan.FromSeconds(4)));
+            if (IsDisposed || c != selected)
+            {
+                return;
+            }
+            if (info == null || !fw.NewerThan(info))
+            {
+                cubeStatus.Text = info == null ? "Keine Antwort von SysopTV. Aktualisiert werden nur Würfel mit SysopTV-Firmware." : "Die Firmware ist schon aktuell.";
+                ShowFirmware(info);
+                return;
+            }
+            string question = "Firmware von " + c.Title + " von " + info.Version + " auf " + fw.Version + " aktualisieren?\n\n" +
+                              "Der Würfel startet dabei neu und zeigt etwa eine Minute lang nichts vom Programm. Während des Updates nicht den Strom trennen.";
+            if (MessageBox.Show(FindForm(), question, "SysopTV", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+            {
+                updateButton.Enabled = true;
+                cubeStatus.Text = "";
+                return;
+            }
+            if (fw.FromGitHub)
+            {
+                // Download from the release, checked against SHA256SUMS.txt, kept in the data folder.
+                cubeStatus.Text = "Lade Firmware " + fw.Version + " von GitHub ...";
+                string dlError = null;
+                bool ok = await Task.Run(() => fw.EnsureLocal(out dlError));
+                if (IsDisposed)
+                {
+                    return;
+                }
+                if (!ok)
+                {
+                    cubeStatus.Text = dlError;
+                    updateButton.Enabled = true;
+                    Log.Write("Firmware " + fw.Version + " von GitHub nicht verwendet: " + dlError);
+                    MessageBox.Show(FindForm(), dlError + " Es wurde nichts aufgespielt.", "SysopTV", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+            byte[] image;
+            try
+            {
+                image = System.IO.File.ReadAllBytes(fw.Path);
+            }
+            catch (Exception ex)
+            {
+                cubeStatus.Text = "Die Firmware-Datei ließ sich nicht lesen: " + ex.Message;
+                updateButton.Enabled = true;
+                return;
+            }
+
+            string password = c.AdminPassword;
+            busy = true;
+            UpdateSaveButton();
+            UpdateResult result = null;
+            Log.Write("Firmware-Update " + c.Title + ": " + info.Version + " auf " + fw.Version);
+            while (true)
+            {
+                string pw = password;
+                Action<string> progress = text => { if (!IsDisposed) { BeginInvoke((Action)(() => cubeStatus.Text = text)); } };
+                Ctx.Service.BeginUpdate(c.Address);
+                try
+                {
+                    result = await Task.Run(() => new FirmwareUpdater().Run(c.Address, pw, System.IO.Path.GetFileName(fw.Path), image, fw.Version, progress));
+                }
+                finally
+                {
+                    Ctx.Service.EndUpdate(c.Address);
+                }
+                if (IsDisposed)
+                {
+                    return;
+                }
+                if (result.Outcome != UpdateOutcome.PasswordNeeded && result.Outcome != UpdateOutcome.WrongPassword)
+                {
+                    break;
+                }
+                // Ask for the admin password, then try again; kept once it worked.
+                string asked = PasswordPrompt.Ask(FindForm(), result.Outcome == UpdateOutcome.WrongPassword
+                    ? "Das Admin-Passwort von " + c.Title + " stimmt nicht. Bitte noch einmal eingeben:"
+                    : "Für das Update braucht das Programm das Admin-Passwort von " + c.Title + ":");
+                if (asked == null)
+                {
+                    break;
+                }
+                password = asked;
+            }
+            busy = false;
+            UpdateSaveButton();
+            Log.Write("Firmware-Update " + c.Title + ": " + result.Outcome + ", " + result.Message);
+            bool authWorked = result.Outcome != UpdateOutcome.PasswordNeeded && result.Outcome != UpdateOutcome.WrongPassword &&
+                              result.Outcome != UpdateOutcome.NotReachable;
+            if (authWorked && password != c.AdminPassword && !string.IsNullOrEmpty(password))
+            {
+                c.AdminPassword = password;
+                if (c == selected)
+                {
+                    filling = true;
+                    adminPassword.Text = password;
+                    filling = false;
+                }
+                Ctx.Save();
+            }
+            if (c != selected)
+            {
+                return;
+            }
+            cubeStatus.Text = result.Message;
+            if (result.Outcome != UpdateOutcome.Done)
+            {
+                MessageBox.Show(FindForm(), result.Message, "SysopTV", MessageBoxButtons.OK,
+                                result.Outcome == UpdateOutcome.NoRestart || result.Outcome == UpdateOutcome.Aborted ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            }
+            await TestCube();
+            if (result.Outcome == UpdateOutcome.Done)
+            {
+                cubeStatus.Text = result.Message;
             }
         }
     }

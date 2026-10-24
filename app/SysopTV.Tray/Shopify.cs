@@ -295,7 +295,7 @@ namespace SysopTV.Tray
             }
             if (b.Contains("read_orders") || b.Contains("Required access"))
             {
-                return "Der App fehlt der Scope read_orders. Im Dev Dashboard eintragen, neue Version veröffentlichen und im Shop bestätigen.";
+                return "Der App fehlt der Scope read_orders. Im Dev Dashboard eintragen, neue Version veröffentlichen, dann die App im Shop deinstallieren und neu installieren. Client-ID und Secret bleiben gleich.";
             }
             if (status == 401 || b.Contains("ACCESS_DENIED") || b.Contains("Invalid API key or access token"))
             {

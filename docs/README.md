@@ -23,13 +23,12 @@ Auf Deutsch: [Schnellstart](de/schnellstart.md) auf einer Seite.
 
 ## Status
 
-Firmware 0.4.3, Windows program 0.7.0, WordPress plugin "SysopTV for WooCommerce" 0.2.0.
+Firmware 0.5.0, Windows program 0.8.0, WordPress plugin "SysopTV for WooCommerce" 0.2.0.
 
-Tested on real hardware:
+Tested on real hardware with firmware 0.3.2:
 
 - flashing through the web interface of the original firmware
 - WLAN setup through the setup hotspot
-- all six designs of the firmware with live data
 - clock
 - updates through the `/update` page
 - admin password and the protection of the pages
@@ -46,8 +45,7 @@ Not yet tested on real hardware, so there is no promise that these work:
 - the device name (new in firmware 0.4.0)
 - `/api/settings` (new in 0.4.0)
 - picture mode with `/api/frame` (new in 0.4.0)
-- "nicht aktiv" for a session without reset time (new in 0.4.1)
-- the overview page in picture mode and the fall back to the own design with fresh numbers (new in 0.4.2)
 - the valid picture: no parts on a screen the cube drew itself (new in 0.4.3)
-- the Windows program 0.7.0
+- firmware 0.5.0 as a whole: only pictures, NO CARRIER with internet time after 3 minutes, `POST /api/nocarrier`
+- the Windows program 0.8.0, including the firmware update from the program and NO CARRIER on exit and sleep
 - the WordPress plugin "SysopTV for WooCommerce" 0.2.0

@@ -5,15 +5,14 @@
 // guard: if the firmware crashes several times in a row, SysopTV starts in
 // rescue mode, which only offers WLAN and the update page. It also runs the
 // password reset by short power cycles, the backlight with night mode and
-// hands the usage data to the selected design.
+// the NO CARRIER screen whenever the PC sends no pictures.
 
 #include <Arduino.h>
 #include "config.h"
 #include "screen.h"
 #include "net.h"
-#include "usage.h"
+#include "ntpclock.h"
 #include "settings.h"
-#include "design.h"
 #include "frame.h"
 #include "auth.h"
 #include "store.h"
@@ -84,36 +83,62 @@ void setup() {
   netBegin(rescueMode);
 }
 
-// Hands the usage data to the design. Rescue mode stays on the status screen.
+// True once the "Ready" screen should make way for NO CARRIER although no
+// picture arrived yet. Kept as a flag, so a millis() overflow cannot bring
+// the "Ready" screen back.
+static bool readyTimedOut() {
+  static bool timedOut = false;
+  if (!timedOut && millis() >= SYSOPTV_NO_PC_AFTER_MS) {
+    timedOut = true;
+  }
+  return timedOut;
+}
+
+// Text under NO CARRIER: when the last picture came.
+static void lastPictureText(bool haveTime, int64_t utc, int32_t tz, char* out, size_t size) {
+  if (!frameSeen()) {
+    snprintf(out, size, "noch kein Bild");
+    return;
+  }
+  uint32_t age = frameAgeSeconds();
+  if (haveTime) {
+    char hhmm[6];
+    clockFormat(utc - (int64_t)age, tz, hhmm, sizeof(hhmm));
+    snprintf(out, size, "letztes Bild %s", hhmm);
+  } else if (age < 3600) {
+    snprintf(out, size, "letztes Bild vor %u min", (unsigned)(age / 60));
+  } else {
+    snprintf(out, size, "letztes Bild vor %u h", (unsigned)(age / 3600));
+  }
+}
+
+// The PC draws everything. Without pictures the firmware shows NO CARRIER
+// with the clock. Rescue mode stays on the status screen.
 static void updateView() {
   if (rescueMode) {
     return;
   }
-  static uint8_t shownDesign = 0xFF;
-  uint8_t id = designUpdate();
-  const Design& design = designGet(id);
-  // In picture mode the PC draws, the designs stay off until it times out.
-  if (!netScreenFree() || !usageScreenActive() || frameModeActive()) {
+  if (!netScreenFree() || frameModeActive() || !(frameSeen() || frameEnded() || readyTimedOut())) {
     viewOnScreen = false;
     return;
   }
   // The texts change once a minute at most, checking twice a second is plenty.
-  if (viewOnScreen && id == shownDesign && millis() - lastViewUpdate < 500) {
+  if (viewOnScreen && millis() - lastViewUpdate < 500) {
     return;
   }
   lastViewUpdate = millis();
-  if (!viewOnScreen || id != shownDesign) {
-    // Something else drew over the screen, or the design changed: draw all once.
-    design.invalidate();
-    viewOnScreen = true;
-    shownDesign = id;
-  }
-  UsageView view;
-  usageBuildView(view);
-  netIpText(view.ip, sizeof(view.ip));
-  // The design draws over whatever the PC sent last.
-  frameInvalidate();
-  design.show(view);
+  bool full = !viewOnScreen;
+  viewOnScreen = true;
+  int64_t utc = 0;
+  int32_t tz = 0;
+  bool haveTime = clockNow(utc, tz);
+  char clock[6];
+  char last[32];
+  char ip[16];
+  clockFormat(haveTime ? utc : 0, tz, clock, sizeof(clock));
+  lastPictureText(haveTime, utc, tz, last, sizeof(last));
+  netIpText(ip, sizeof(ip));
+  screenNoCarrier(full, clock, last, ip);
 }
 
 static bool inWindow(uint16_t minute, uint16_t from, uint16_t to) {
@@ -136,7 +161,7 @@ static void updateBrightness() {
   uint8_t level = s.brightness;
   int64_t utc;
   int32_t tz;
-  if (s.nightEnabled && usageTime(utc, tz)) {
+  if (s.nightEnabled && clockNow(utc, tz)) {
     int64_t local = utc + tz;
     int64_t daySec = ((local % 86400) + 86400) % 86400;
     if (inWindow((uint16_t)(daySec / 60), s.nightFrom, s.nightTo)) {

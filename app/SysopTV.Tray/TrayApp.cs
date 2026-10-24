@@ -1,7 +1,9 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// The program in the tray: icon, menu, balloon tips on state changes.
+// The program in the tray: icon, menu, balloon tips on state changes, limit
+// warnings and a new version. On exit, at the end of the Windows session and
+// before sleep every cube shows NO CARRIER at once.
 
 using System;
 using System.Diagnostics;
@@ -9,6 +11,7 @@ using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace SysopTV.Tray
 {
@@ -23,6 +26,11 @@ namespace SysopTV.Tray
         private MainForm mainForm;
         private Icon currentIcon;
         private string lastCategory = "none";
+        private string balloonUrl;  // opened when the balloon of a new version is clicked
+        private bool signedOff;
+
+        // How long the cubes get for NO CARRIER when the program ends or the PC sleeps.
+        internal static readonly TimeSpan SignOffTimeout = TimeSpan.FromSeconds(2);
 
         internal TrayApp(EventWaitHandle showEvent)
         {
@@ -33,6 +41,12 @@ namespace SysopTV.Tray
             service = new SenderService(config);
             service.StatusChanged += () => invoker.BeginInvoke((Action)UpdateUi);
             service.CubeAdopted += address => invoker.BeginInvoke((Action)(() => Adopted(address)));
+            service.LimitAlert += text => invoker.BeginInvoke((Action)(() => Balloon(text, ToolTipIcon.Warning, null)));
+            service.UpdateFound += r => invoker.BeginInvoke((Action)(() =>
+                Balloon("SysopTV " + r.AppVersion + " ist erschienen. Ein Klick öffnet das Fenster, aktualisieren auf der Seite Programm.", ToolTipIcon.Info, null)));
+            service.FirmwareFound += r => invoker.BeginInvoke((Action)(() =>
+                Balloon("Firmware " + r.FirmwareVersion + " für den Würfel ist erschienen. Aktualisieren auf der Seite Würfel.", ToolTipIcon.Info, null)));
+            Program.RequestExit = () => invoker.BeginInvoke((Action)ExitThread);
 
             statusItem = new ToolStripMenuItem("Noch keine Daten") { Enabled = false };
             var menu = new ContextMenuStrip();
@@ -54,6 +68,16 @@ namespace SysopTV.Tray
                 Visible = true
             };
             notify.DoubleClick += (s, e) => ShowWindow();
+            notify.BalloonTipClicked += (s, e) => OpenBalloonUrl();
+            notify.BalloonTipClosed += (s, e) => balloonUrl = null;
+
+            if (config.RestoredFromBackup)
+            {
+                Balloon("Die Einstellungen waren beschädigt und wurden aus der Sicherung wiederhergestellt.", ToolTipIcon.Warning, null);
+            }
+
+            SystemEvents.SessionEnding += OnSessionEnding;
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
             // A second start of the program sets this event.
             showWait = ThreadPool.RegisterWaitForSingleObject(showEvent,
@@ -102,6 +126,59 @@ namespace SysopTV.Tray
             });
         }
 
+        private void Balloon(string text, ToolTipIcon icon, string url)
+        {
+            balloonUrl = url;
+            notify.ShowBalloonTip(8000, "SysopTV", text, icon);
+        }
+
+        private void OpenBalloonUrl()
+        {
+            string url = balloonUrl;
+            balloonUrl = null;
+            if (url == null)
+            {
+                ShowWindow();
+                return;
+            }
+            try
+            {
+                Process.Start(url);
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Browser nicht geöffnet: " + ex.GetType().Name);
+            }
+        }
+
+        // Windows logs off or shuts down: the cubes show NO CARRIER.
+        private void OnSessionEnding(object sender, SessionEndingEventArgs e)
+        {
+            SignOff();
+        }
+
+        private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+        {
+            if (e.Mode == PowerModes.Suspend)
+            {
+                service.Suspend(SignOffTimeout);
+            }
+            else if (e.Mode == PowerModes.Resume)
+            {
+                service.Resume();
+            }
+        }
+
+        private void SignOff()
+        {
+            if (signedOff)
+            {
+                return;
+            }
+            signedOff = true;
+            service.SignOff(SignOffTimeout);
+        }
+
         private void UpdateUi()
         {
             SenderStatus st = service.Status;
@@ -144,6 +221,7 @@ namespace SysopTV.Tray
                 }
                 if (text != null)
                 {
+                    balloonUrl = null;
                     notify.ShowBalloonTip(5000, "SysopTV", text, icon);
                 }
                 lastCategory = st.Category;
@@ -262,8 +340,11 @@ namespace SysopTV.Tray
 
         protected override void ExitThreadCore()
         {
+            SystemEvents.SessionEnding -= OnSessionEnding;
+            SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             showWait.Unregister(null);
             watchTimer.Dispose();
+            SignOff();
             service.Dispose();
             notify.Visible = false;
             notify.Dispose();

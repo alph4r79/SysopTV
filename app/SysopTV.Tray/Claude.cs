@@ -53,37 +53,6 @@ namespace SysopTV.Tray
             return (UsageData)MemberwiseClone();
         }
 
-        // Same JSON as the script: state, now, tz, then session and week only with "ok".
-        internal string ToJson(DateTimeOffset now)
-        {
-            var sb = new StringBuilder();
-            sb.Append("{\"state\":\"").Append(State).Append("\",\"now\":")
-              .Append(now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture))
-              .Append(",\"tz\":")
-              .Append(((int)TimeZoneInfo.Local.GetUtcOffset(now.UtcDateTime).TotalSeconds).ToString(CultureInfo.InvariantCulture));
-            if (State == "ok")
-            {
-                AppendLimit(sb, "session", Session);
-                AppendLimit(sb, "week", Week);
-            }
-            sb.Append('}');
-            return sb.ToString();
-        }
-
-        private static void AppendLimit(StringBuilder sb, string name, UsageLimit l)
-        {
-            if (l == null)
-            {
-                return;
-            }
-            sb.Append(",\"").Append(name).Append("\":{\"used\":").Append(l.Used.ToString(CultureInfo.InvariantCulture));
-            if (l.ResetsAt.HasValue)
-            {
-                sb.Append(",\"resetsAt\":").Append(l.ResetsAt.Value.ToString(CultureInfo.InvariantCulture));
-            }
-            sb.Append('}');
-        }
-
         internal string Summary()
         {
             if (State != "ok")

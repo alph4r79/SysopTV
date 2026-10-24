@@ -2,6 +2,8 @@
 
 This page is for anyone who wants to build SysopTV, write an own sender or design, or prepare a release.
 
+Since firmware 0.5.0 the cube draws nothing of its own except the system screens (start, WLAN, update) and NO CARRIER with its clock. Everything else comes from the PC as pictures. The firmware has no designs and no parser for usage numbers any more.
+
 You need:
 
 - Git Bash, WSL or Linux for the build scripts
@@ -62,6 +64,8 @@ bash build-app.sh
 
 The script puts `sysoptv-app-<version>-portable.zip` and, if Inno Setup is installed, `sysoptv-app-<version>-setup.exe` into `dist/`. The program version is set only in `app/SysopTV.Tray/SysopTV.Tray.csproj`, separate from the firmware version. The program uses only what .NET Framework 4.8 brings along, no extra packages.
 
+ZIP and setup contain the firmware for "Firmware aktualisieren" as `firmware/sysoptv-<firmware version>.bin`. `build-app.sh` takes it from `dist/`, with the version from `firmware/SysopTV/config.h`, so run `build.sh` first. The program takes the newest valid file in that folder (header `E9 02 02 40`, at most 500000 bytes).
+
 ### WordPress plugin
 
 ```sh
@@ -76,7 +80,7 @@ Tests and trials never touch the real settings of a user. The program finds all 
 
 - Every test uses a fresh temp folder through `SYSOPTV_DATA_DIR` and deletes it afterwards.
 - Before the first write, a test checks that `AppPaths.ConfigDir` and `AppPaths.LogDir` point to that folder and not to `%APPDATA%\SysopTV` or `%LOCALAPPDATA%\SysopTV`, and stops otherwise.
-- Tests never ask Anthropic, Shopify or a real shop. The service has replaceable delegates for that (`Query`, `FetchShopFrom`, `SendFrameTo`, `ReadInfo`).
+- Tests never ask Anthropic, Shopify, GitHub or a real shop, and never a real cube. The service has replaceable delegates for that (`Query`, `FetchShopFrom`, `SendFrameTo`, `SendNoCarrierTo`, `ReadInfo`, `FetchRelease`). The addresses of the update check (`UpdateCheck.ApiUrl`, `DownloadPrefix`) can only be changed by tests, for a simulated GitHub on `127.0.0.1`; `AppUpdate.StartProcess` is replaced so the silent setup is never really started. `FirmwareUpdater` has `ReadInfo`, `GetUpdatePage` and `Upload`; its real HTTP requests can be tested against a small simulated cube on `127.0.0.1`.
 
 `SysopTV.exe --docs <folder>` writes the pictures of this documentation: `<folder>\screens` with the designs and `<folder>\app` with every page of the window. It uses sample data, a fresh temp folder for all program files, and no network. Run it as `SysopTV.exe --docs docs\images`.
 
@@ -84,22 +88,16 @@ Tests and trials never touch the real settings of a user. The program finds all 
 
 The Windows program uses these. They are documented here for anyone who wants to write an own sender.
 
-- `GET /api/info` (always open): status as JSON, for example `version`, `ip`, `uptime`, `deviceName`, `capabilities` (`["usage","settings","frame"]`), `design`, `frameValid`, `frameSource` and `frameAgeSeconds`. It never contains the password, its hash, the API key or the WLAN password.
-- `POST /api/usage`: the Claude numbers as JSON, at most 512 bytes. Needs the header `X-SysopTV-Key` if an API key is set. Example:
-
-  ```json
-  {"state":"ok","now":1761146400,"tz":7200,
-   "session":{"used":23,"resetsAt":1761149400},
-   "week":{"used":85,"resetsAt":1761166800}}
-  ```
-
-  `state` is `ok`, `login` (login expired) or `error`. `now` is Unix seconds in UTC and `tz` the offset to UTC in seconds, both required for `ok`. `session` and `week` may be missing; `used` is a percentage, `resetsAt` Unix seconds or `null`. Answers: `200`, `400` with a short message, `401` for a missing or wrong key, `413` for a too large body, `503` in rescue mode.
-- `GET /api/settings` and `POST /api/settings`: the display settings as JSON (`design`, `cycleSeconds`, `showUsed`, `brightness`, `night` with `enabled`, `from`, `to` and `brightness`, `deviceName`). Both need the admin password (HTTP Basic Auth) if one is set. `POST` only works with `Content-Type: application/json` and the header `X-SysopTV-Client: app`. All fields are optional and checked like on the settings page. The cube allows no cross origin requests, so web pages cannot use this interface.
-- `POST /api/frame`: picture mode. The format is described in [Picture format](frame-format.md).
+- `GET /api/info` (always open): status as JSON, for example `version`, `ip`, `uptime`, `deviceName`, `capabilities`, `displayStatus`, `frameValid`, `frameSource` and `frameAgeSeconds`. It never contains the password, its hash, the API key or the WLAN password. Since firmware 0.5.0 `capabilities` is `["settings","frame","nocarrier"]`: without `usage` the cube takes no numbers and draws no designs, with `nocarrier` it knows `POST /api/nocarrier`. Firmware 0.4.x reports `["usage","settings","frame"]`.
+- `POST /api/frame`: a picture, see [Picture format](frame-format.md). Needs the header `X-SysopTV-Key` if an API key is set.
+- `POST /api/nocarrier` (since 0.5.0): ends picture mode at once and shows NO CARRIER with the clock. Same protection as `/api/frame`; the body is ignored. Afterwards the next picture must be a full one. Answers: `200 {"ok":true}`, `401` for a missing or wrong key, `503` in rescue mode.
+- `GET /api/settings` and `POST /api/settings`: the settings as JSON (`brightness`, `night` with `enabled`, `from`, `to` and `brightness`, `deviceName`, and `apiKeySet` when reading). Both need the admin password (HTTP Basic Auth) if one is set. `POST` only works with `Content-Type: application/json` and the header `X-SysopTV-Client: app`. All fields are optional and checked like on the settings page; the design fields of firmware 0.4.x (`design`, `cycleSeconds`, `showUsed`) are ignored. The cube allows no cross origin requests, so web pages cannot use this interface.
+- `GET /update` and `POST /update?csrf=<token>` (admin password): the update page of the browser. The form address carries the token; the file goes as multipart field `firmware`. The program uses the same way for "Firmware aktualisieren".
+- `POST /api/usage` existed up to firmware 0.4.x for the Claude numbers. Since 0.5.0 it is gone (answer `404`).
 
 ### Picture mode
 
-Since firmware 0.4.0 a PC can draw the whole screen itself and send it as a picture, also as parts of the screen. The cube then only shows these pictures. Pictures have priority over numbers. Since firmware 0.4.2 numbers sent at the same time are kept: if no picture arrives for 3 minutes, the cube draws its own chosen design with them. Since firmware 0.4.3 the cube refuses parts with `409` and `full_frame_required` while its screen is not a complete picture from the PC; `/api/info` reports this as `frameValid`. Brightness and night mode also apply in picture mode.
+Since firmware 0.4.0 a PC can draw the whole screen itself and send it as a picture, also as parts of the screen. Since firmware 0.4.3 the cube refuses parts with `409` and `full_frame_required` while its screen is not a complete picture from the PC; `/api/info` reports this as `frameValid`. Since firmware 0.5.0 pictures are the only way: if no picture arrives for 3 minutes, or after `POST /api/nocarrier`, the cube shows NO CARRIER with its clock (internet time). Brightness and night mode also apply in picture mode.
 
 ## Interface of the plugin
 
@@ -115,7 +113,7 @@ The panel of the cube shows very dark colours much too bright and with a green t
 - Content keeps at least 8 pixels from the edge of the picture.
 - Amber looks yellow with too much green, so use about (255,110,0). Green looks mint with blue in it, so use green without blue.
 
-Pictures are 240x240 pixels in RGB565 (`Canvas` in the program). A design of the program gets finished texts and values and knows nothing about network or settings. A new Claude design goes into `ClaudeDesigns.All` (new designs only at the end, the id is stored in `config.json`), a new big display style into `ShopBig.Styles`, a new detail view into `ShopDesigns.All`. A new design of the firmware is a new `view_<name>.cpp` with `invalidate()` and `show()`, an entry in `views.h`, `DesignId` and the table in `design.cpp`.
+Pictures are 240x240 pixels in RGB565 (`Canvas` in the program). A design of the program gets finished texts and values and knows nothing about network or settings. A new Claude design goes into `ClaudeDesigns.All` (new designs only at the end, the id is stored in `config.json`), a new big display style into `ShopBig.Styles`, a new detail view into `ShopDesigns.All`. The firmware has no designs since 0.5.0; new displays are always pictures of the program.
 
 ## Adding a new provider
 
@@ -131,7 +129,7 @@ A provider is a new source of numbers for a cube, like Shopify or WooCommerce. I
 ## Release
 
 1. Set the versions: firmware in `firmware/SysopTV/config.h`, program in `app/SysopTV.Tray/SysopTV.Tray.csproj`, plugin in the header of `wordpress/sysoptv-woocommerce/sysoptv-woocommerce.php`, in `SYSOPTV_WC_VERSION` and in `readme.txt` (with changelog).
-2. Build: `bash build.sh`, `bash build-app.sh`, `python wordpress/tools/build-plugin.py`. The files land in `dist/`: `sysoptv-<firmware>.bin`, `sysoptv-app-<program>-setup.exe`, `sysoptv-app-<program>-portable.zip`, `sysoptv-woocommerce-<plugin>.zip`.
+2. Build: `python wordpress/tools/build-plugin.py`, `bash build.sh`, `bash build-app.sh` (in this order, `build-app.sh` writes the final checksums). The files land in `dist/`: `sysoptv-<firmware>.bin`, `sysoptv-app-<program>-setup.exe`, `sysoptv-app-<program>-portable.zip`, `sysoptv-woocommerce-<plugin>.zip` and `SHA256SUMS.txt`. `build.sh` and `build-app.sh` both write `SHA256SUMS.txt` over the files of the current versions that exist in `dist/`, in the format of `sha256sum` (checksum, two spaces, file name).
 3. Run all offline tests (with `SYSOPTV_DATA_DIR`).
 4. Renew the pictures of the documentation with `SysopTV.exe --docs docs\images` and check them.
-5. Create the release on GitHub with a tag like `v0.7.0` and upload exactly the files from `dist/` named in step 2.
+5. Create the release on GitHub and upload exactly the files from `dist/` named in step 2. **Every release contains `SHA256SUMS.txt`**, without it the program downloads nothing. Firmware and program may come out separately: a release may carry only `sysoptv-X.Y.Z.bin`, or only the program files, always with `SHA256SUMS.txt`. The file names must follow the scheme `sysoptv-app-X.Y.Z-setup.exe`, `sysoptv-app-X.Y.Z-portable.zip`, `sysoptv-X.Y.Z.bin`; the program reads the versions from them, not from the tag. Only the latest published release counts, drafts and pre-releases are ignored.

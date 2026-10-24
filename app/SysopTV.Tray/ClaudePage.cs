@@ -1,8 +1,8 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Page "Claude": interval, login, last and next query, an active 429 block
-// and "Jetzt abfragen".
+// Page "Claude": interval, login, last and next query, an active 429 block,
+// "Jetzt abfragen" and the warning when a limit gets close.
 
 using System;
 using System.Collections.Generic;
@@ -22,6 +22,10 @@ namespace SysopTV.Tray
         private readonly Label stand = Value();
         private readonly Button queryNow = new Button { Text = "Jetzt abfragen", AutoSize = true };
         private readonly Label queryNote = Note("");
+        private readonly CheckBox notify = new CheckBox { Text = "Benachrichtigen, wenn das Limit knapp wird", AutoSize = true };
+        private readonly ComboBox notifySession = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
+        private readonly ComboBox notifyWeek = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
+        private bool filling;
         // Where the end of the login comes from; the pictures of the documentation put a sample here.
         internal static Func<DateTime?> LoginSource = ClaudeClient.LoginExpires;
 
@@ -41,8 +45,28 @@ namespace SysopTV.Tray
             AddRow(g, "Woche", week);
             AddRow(g, "Stand der Werte", stand);
             AddRow(g, null, Row(queryNow, queryNote));
+
+            foreach (ComboBox box in new[] { notifySession, notifyWeek })
+            {
+                box.Items.Add("aus");
+                foreach (int t in NotifyConfig.Thresholds)
+                {
+                    box.Items.Add("ab " + t + " %");
+                }
+            }
+            TableLayoutPanel n = Grid();
+            AddRow(n, null, notify);
+            AddRow(n, "Session", Row(notifySession, Note("verbraucht, höchstens eine Meldung bis zum nächsten Session-Reset")));
+            AddRow(n, "Woche", Row(notifyWeek, Note("verbraucht, höchstens eine Meldung bis zum Wochen-Reset")));
+            FillNotify();
+
             Controls.Add(Stack(Heading("Claude"), g,
-                Note("Das Programm liest die Limits mit der Anmeldung von Claude Code und erneuert sie nie selbst. Läuft sie ab, reicht es, Claude Code kurz zu benutzen.")));
+                Note("Das Programm liest die Limits mit der Anmeldung von Claude Code und erneuert sie nie selbst. Läuft sie ab, reicht es, Claude Code kurz zu benutzen."),
+                n,
+                Note("Die Meldung erscheint unten rechts in Windows, auch wenn kein Würfel Claude zeigt.")));
+            notify.CheckedChanged += (s, e) => SaveNotify();
+            notifySession.SelectedIndexChanged += (s, e) => SaveNotify();
+            notifyWeek.SelectedIndexChanged += (s, e) => SaveNotify();
 
             interval.Validated += (s, e) => SaveInterval();
             interval.ValueChanged += (s, e) =>
@@ -58,6 +82,36 @@ namespace SysopTV.Tray
         internal override string Title
         {
             get { return "Claude"; }
+        }
+
+        private static int IndexOf(int threshold)
+        {
+            return threshold <= 0 ? 0 : Array.IndexOf(NotifyConfig.Thresholds, threshold) + 1;
+        }
+
+        private void FillNotify()
+        {
+            filling = true;
+            NotifyConfig cfg = Ctx.Config.Notify;
+            notify.Checked = cfg.Enabled;
+            notifySession.SelectedIndex = Math.Max(0, IndexOf(cfg.Session));
+            notifyWeek.SelectedIndex = Math.Max(0, IndexOf(cfg.Week));
+            notifySession.Enabled = notifyWeek.Enabled = cfg.Enabled;
+            filling = false;
+        }
+
+        private void SaveNotify()
+        {
+            if (filling)
+            {
+                return;
+            }
+            NotifyConfig cfg = Ctx.Config.Notify;
+            cfg.Enabled = notify.Checked;
+            cfg.Session = notifySession.SelectedIndex <= 0 ? 0 : NotifyConfig.Thresholds[notifySession.SelectedIndex - 1];
+            cfg.Week = notifyWeek.SelectedIndex <= 0 ? 0 : NotifyConfig.Thresholds[notifyWeek.SelectedIndex - 1];
+            notifySession.Enabled = notifyWeek.Enabled = cfg.Enabled;
+            Ctx.Save();
         }
 
         private void SaveInterval()

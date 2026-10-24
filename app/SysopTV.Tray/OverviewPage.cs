@@ -19,7 +19,7 @@ namespace SysopTV.Tray
             View = View.Details,
             FullRowSelect = true,
             HeaderStyle = ColumnHeaderStyle.Nonclickable,
-            Width = 640,
+            Width = 680,
             Height = 130,
             MultiSelect = false
         };
@@ -30,8 +30,8 @@ namespace SysopTV.Tray
         {
             this.allPages = allPages;
             cubes.Columns.Add("Würfel", 150);
-            cubes.Columns.Add("Funktion", 165);
-            cubes.Columns.Add("Design", 160);
+            cubes.Columns.Add("Funktion", 190);
+            cubes.Columns.Add("Design", 175);
             cubes.Columns.Add("Gesendet", 62);
             cubes.Columns.Add("Zustand", 97);
             Controls.Add(Stack(Heading("Übersicht"), cubes, summaries));

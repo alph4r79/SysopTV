@@ -4,7 +4,9 @@
 // %LOCALAPPDATA%\SysopTV\state.json: time of the last query at Anthropic, an
 // active 429 block and the last valid values with their time. After a restart
 // the program waits for the interval and the block instead of asking at once.
-// Never contains the login token or anything from .credentials.json.
+// Also which limit warnings were shown in the current periods and when the
+// update check last ran. Never contains the login token or anything from
+// .credentials.json.
 
 using System;
 using System.IO;
@@ -46,6 +48,20 @@ namespace SysopTV.Tray
         [DataMember(Name = "woocommerce", EmitDefaultValue = false)] public ShopData WooShop;
         [DataMember(Name = "woocommerceOkAt")] public long WooOkAt;
         [DataMember(Name = "shopifyYear", EmitDefaultValue = false)] public YearCache ShopifyYear;  // day values for the year
+
+        // Limit warnings: the reset that ends the period and the highest
+        // threshold already shown in it.
+        [DataMember(Name = "notifiedSessionReset")] public long NotifiedSessionReset;
+        [DataMember(Name = "notifiedSessionLevel")] public int NotifiedSessionLevel;
+        [DataMember(Name = "notifiedWeekReset")] public long NotifiedWeekReset;
+        [DataMember(Name = "notifiedWeekLevel")] public int NotifiedWeekLevel;
+
+        // Update check: when it last asked, the release it found (versions and
+        // download addresses) and the versions the tray message was shown for.
+        [DataMember(Name = "updateCheckedAt")] public long UpdateCheckedAt;
+        [DataMember(Name = "updateRelease", EmitDefaultValue = false)] public ReleaseInfo UpdateRelease;
+        [DataMember(Name = "updateNotified", EmitDefaultValue = false)] public string UpdateNotified;
+        [DataMember(Name = "updateNotifiedFirmware", EmitDefaultValue = false)] public string UpdateNotifiedFirmware;
 
         internal ShopData Shop(string source)
         {

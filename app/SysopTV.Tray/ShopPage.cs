@@ -129,7 +129,7 @@ namespace SysopTV.Tray
         {
             if (d.YearNote == ShopifyClient.MissingAllOrders)
             {
-                return d.YearNote + ", Heute, Woche und Monat gehen weiter";
+                return d.YearNote + ". Heute, Woche und Monat gehen weiter. Abhilfe: im Dev Dashboard read_all_orders eintragen, neue Version veröffentlichen, dann die App im Shop deinstallieren und neu installieren. Client-ID und Secret bleiben gleich";
             }
             if (d.YearNote == WooClient.UpdatePlugin)
             {

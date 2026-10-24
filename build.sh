@@ -17,6 +17,26 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# SHA256SUMS.txt over the release files of the current versions in dist/
+# (firmware, setup, portable ZIP, plugin), in the format of sha256sum. The
+# program checks every download from GitHub against it, so every release
+# carries this file.
+write_sums() {
+  local fw app plugin files=()
+  fw=$(sed -n 's/^#define SYSOPTV_VERSION "\([^"]*\)".*/\1/p' firmware/SysopTV/config.h)
+  app=$(sed -n 's:.*<Version>\([^<]*\)</Version>.*:\1:p' app/SysopTV.Tray/SysopTV.Tray.csproj | head -n 1)
+  plugin=$(sed -n 's/^ \* Version: *\([0-9.]*\).*/\1/p' wordpress/sysoptv-woocommerce/sysoptv-woocommerce.php | head -n 1)
+  for f in "sysoptv-$fw.bin" "sysoptv-app-$app-setup.exe" "sysoptv-app-$app-portable.zip" "sysoptv-woocommerce-$plugin.zip"; do
+    if [ -f "dist/$f" ]; then
+      files+=("$f")
+    fi
+  done
+  if [ ${#files[@]} -gt 0 ]; then
+    (cd dist && sha256sum "${files[@]}" | sed 's/ \*/  /' > SHA256SUMS.txt)
+    echo "Prüfsummen: dist/SHA256SUMS.txt (${#files[@]} Dateien)"
+  fi
+}
+
 VERSION=$(sed -n 's/^#define SYSOPTV_VERSION "\([^"]*\)".*/\1/p' firmware/SysopTV/config.h)
 if [ -z "$VERSION" ]; then
   echo "FEHLER: SYSOPTV_VERSION nicht in config.h gefunden." >&2
@@ -34,7 +54,7 @@ TFT="-DUSER_SETUP_LOADED=1 -DST7789_DRIVER=1 -DTFT_WIDTH=240 -DTFT_HEIGHT=240 \
 -DTFT_INVERSION_ON=1 -DTFT_MISO=-1 -DTFT_MOSI=13 -DTFT_SCLK=14 -DTFT_CS=-1 \
 -DTFT_DC=0 -DTFT_RST=2 -DTFT_BL=5 -DTFT_BACKLIGHT_ON=0 -DSPI_FREQUENCY=27000000 \
 -DTFT_SPI_MODE=SPI_MODE3 \
--DLOAD_GLCD=1 -DLOAD_FONT2=1 -DLOAD_FONT4=1 -DLOAD_FONT8=1 -DDISABLE_ALL_LIBRARY_WARNINGS=1"
+-DLOAD_FONT2=1 -DLOAD_FONT4=1 -DDISABLE_ALL_LIBRARY_WARNINGS=1"
 
 # Only these library versions are tested.
 for LIB in "TFT_eSPI 2.5.43" "ArduinoJson 7.4.3"; do
@@ -67,3 +87,4 @@ if [ "$SIZE" -gt "$LIMIT" ]; then
   echo "FEHLER: Firmware ist zu groß." >&2
   exit 1
 fi
+write_sums

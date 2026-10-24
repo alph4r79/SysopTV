@@ -38,9 +38,7 @@ static_assert(sizeof(Record) + 4 <= RECORD_SIZE, "record too large");
 // survive the update.
 static const uint32_t RECORD_V1_SIZE = 128;
 struct SettingsV1 {
-  uint8_t design;
-  uint8_t cycleSeconds;
-  uint8_t showUsed;
+  uint8_t unused[3];        // design settings of 0.3.x, no longer used
   uint8_t brightness;
   uint8_t nightEnabled;
   uint8_t nightBrightness;
@@ -132,9 +130,6 @@ bool storeLoad(StoredSettings& settings, StoredAuth& auth) {
     RecordV1 r;
     memcpy(&r, buf, sizeof(r));
     memset(&settings, 0, sizeof(settings));
-    settings.design = r.settings.design;
-    settings.cycleSeconds = r.settings.cycleSeconds;
-    settings.showUsed = r.settings.showUsed;
     settings.brightness = r.settings.brightness;
     settings.nightEnabled = r.settings.nightEnabled;
     settings.nightBrightness = r.settings.nightBrightness;

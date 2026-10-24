@@ -1,9 +1,10 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Talking to the cube: POST /api/usage, POST /api/frame, GET /api/info,
+// Talking to the cube: POST /api/frame, POST /api/nocarrier, GET /api/info,
 // GET and POST /api/settings and the search in the local network. Only
-// plain HTTP inside the LAN, no proxy.
+// plain HTTP inside the LAN, no proxy. The firmware update is in
+// FirmwareUpdate.cs.
 
 using System;
 using System.Collections.Generic;
@@ -28,7 +29,7 @@ namespace SysopTV.Tray
         internal string Message;  // short text for log and status
     }
 
-    // Fields of /api/info that the program uses (firmware 0.3.2 and 0.4.0).
+    // Fields of /api/info that the program uses (firmware 0.3.2 to 0.5.0).
     internal sealed class CubeInfo
     {
         internal string Address;
@@ -48,6 +49,12 @@ namespace SysopTV.Tray
         internal bool CanFrame
         {
             get { return Can("frame"); }
+        }
+
+        // POST /api/nocarrier, since firmware 0.5.0.
+        internal bool CanNoCarrier
+        {
+            get { return Can("nocarrier"); }
         }
 
         internal bool Can(string capability)
@@ -84,13 +91,11 @@ namespace SysopTV.Tray
         }
     }
 
-    // Display settings of the cube from /api/settings (firmware 0.4.0).
+    // Settings of the cube from /api/settings (firmware 0.4.0). Design, change
+    // and "used or left" of firmware 0.4.x are left alone: since 0.5.0 the
+    // firmware draws nothing of its own.
     internal sealed class CubeSettings
     {
-        internal int Design;
-        internal List<string> DesignNames = new List<string>();
-        internal int CycleSeconds;
-        internal bool ShowUsed;
         internal int Brightness;
         internal bool NightEnabled;
         internal string NightFrom = "22:00";
@@ -105,12 +110,6 @@ namespace SysopTV.Tray
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-
-        internal static SendResult SendUsage(string address, string json, string apiKey)
-        {
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            return Post(address, "api/usage", content, apiKey);
-        }
 
         // The picture goes as the only file of a multipart upload, see docs/frame-format.md.
         // source names the picture for the overview page of the cube (header X-SysopTV-Source).
@@ -127,6 +126,13 @@ namespace SysopTV.Tray
             };
             form.Add(file);
             return Post(address, "api/frame", form, apiKey, source);
+        }
+
+        // Ends picture mode at once, the cube shows NO CARRIER with its clock
+        // (firmware 0.5.0). Same protection as /api/frame.
+        internal static SendResult SendNoCarrier(string address, string apiKey, TimeSpan timeout)
+        {
+            return Post(address, "api/nocarrier", new ByteArrayContent(new byte[0]), apiKey, "SysopTV", timeout);
         }
 
         // Header values travel as ASCII: everything else, and the percent sign
@@ -148,8 +154,9 @@ namespace SysopTV.Tray
             return sb.ToString();
         }
 
-        private static SendResult Post(string address, string path, HttpContent content, string apiKey, string source = null)
+        private static SendResult Post(string address, string path, HttpContent content, string apiKey, string source = null, TimeSpan? timeout = null)
         {
+            var cts = new CancellationTokenSource(timeout ?? Http.Timeout);
             try
             {
                 using (var req = new HttpRequestMessage(HttpMethod.Post, Net.BaseUrl(address) + path))
@@ -163,7 +170,7 @@ namespace SysopTV.Tray
                     {
                         req.Headers.TryAddWithoutValidation("X-SysopTV-Source", HeaderText(source));
                     }
-                    using (HttpResponseMessage resp = Http.SendAsync(req).GetAwaiter().GetResult())
+                    using (HttpResponseMessage resp = Http.SendAsync(req, cts.Token).GetAwaiter().GetResult())
                     {
                         int code = (int)resp.StatusCode;
                         string text = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -179,6 +186,10 @@ namespace SysopTV.Tray
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                return new SendResult { Status = 0, Message = "keine Antwort (Zeitüberschreitung)" };
+            }
             catch (Exception ex)
             {
                 return new SendResult { Status = 0, Message = ClaudeClient.Describe(ex) };
@@ -186,6 +197,7 @@ namespace SysopTV.Tray
             finally
             {
                 content.Dispose();
+                cts.Dispose();
             }
         }
 
@@ -296,9 +308,6 @@ namespace SysopTV.Tray
         {
             var body = new Dictionary<string, object>
             {
-                { "design", s.Design },
-                { "cycleSeconds", s.CycleSeconds },
-                { "showUsed", s.ShowUsed },
                 { "brightness", s.Brightness },
                 { "night", new Dictionary<string, object>
                     {
@@ -343,9 +352,6 @@ namespace SysopTV.Tray
                 var night = Value(j, "night") as Dictionary<string, object>;
                 var s = new CubeSettings
                 {
-                    Design = Convert.ToInt32(Value(j, "design") ?? 0, CultureInfo.InvariantCulture),
-                    CycleSeconds = Convert.ToInt32(Value(j, "cycleSeconds") ?? 0, CultureInfo.InvariantCulture),
-                    ShowUsed = true.Equals(Value(j, "showUsed")),
                     Brightness = Convert.ToInt32(Value(j, "brightness") ?? 100, CultureInfo.InvariantCulture),
                     NightEnabled = true.Equals(Value(night, "enabled")),
                     NightFrom = Text(night, "from"),
@@ -353,11 +359,6 @@ namespace SysopTV.Tray
                     NightBrightness = Convert.ToInt32(Value(night, "brightness") ?? 10, CultureInfo.InvariantCulture),
                     DeviceName = Text(j, "deviceName")
                 };
-                var names = Value(j, "designNames") as object[];
-                if (names != null)
-                {
-                    s.DesignNames.AddRange(names.Select(n => Convert.ToString(n, CultureInfo.InvariantCulture)));
-                }
                 return s;
             }
         }

@@ -37,14 +37,27 @@ Ausführlich auf Englisch: [Windows app](../windows-app.md).
 ## 3. Würfel einrichten
 
 1. Im Fenster die Seite „Würfel“ öffnen und „Suchen“ drücken. Den gefundenen Würfel anklicken, dann steht er in der Liste. Alternativ „Von Hand hinzufügen“ und die IP-Adresse eintragen.
-2. Das Admin-Passwort des Würfels eintragen. Dann lädt das Programm die „Einstellungen im Würfel“: Ersatzanzeige, Helligkeit, Nachtmodus und Gerätename. Geändertes mit „Auf dem Würfel speichern“ übernehmen.
+2. Das Admin-Passwort des Würfels eintragen. Dann lädt das Programm die „Einstellungen im Würfel“: Helligkeit, Nachtmodus und Gerätename. Geändertes mit „Auf dem Würfel speichern“ übernehmen.
+3. Unter der Liste steht die Firmware des Würfels. Bringt das Programm eine neuere mit, erscheint „Firmware aktualisieren“. Damit spielt das Programm die mitgelieferte Firmware über die Update-Seite des Würfels ein, nach einer Rückfrage. Nur bei Würfeln mit SysopTV, nie bei der Original-Firmware. Bricht ein Update ab, bleibt die alte Firmware erhalten; was dann zu tun ist, steht auf Englisch unter [When an update aborts](../installation.md#when-an-update-aborts).
 
 ## 4. Funktion und Design wählen
 
 - **Claude Limits**: zeigt deine 5-Stunden-Session und dein Wochenlimit. Design wählen (zehn zur Auswahl), dazu „verbraucht“ oder „übrig“ und auf Wunsch einen automatischen Wechsel.
 - **Shopify** oder **WooCommerce**: zeigt Bestellungen und Umsatz. Unter „Ansicht“ entweder „Großanzeige“ mit Zeitraum, Inhalt und einem von elf Stilen, oder „Details“ mit einer von vier Detailansichten. Die Stile Klassik, Säulen, Phosphor und ANSI zeigen immer mehrere Zeiträume zusammen, dann sind Zeitraum und Inhalt ausgegraut.
 
+Mit „Im Wechsel zeigen“ zeigt ein Würfel zwei Funktionen abwechselnd, zum Beispiel Shop und Claude Limits, alle 10 bis 120 Sekunden (Standard 20). Unter „Bearbeiten“ wählst du, welche der beiden Funktionen die Felder darunter einstellen.
+
 Alle Designs mit Bildern: [Designs](../designs.md).
+
+## 5. Ohne PC
+
+Das Programm zeichnet alles, was der Würfel zeigt. Kommt 3 Minuten lang kein Bild, zeigt der Würfel NO CARRIER mit großer Uhrzeit (aus dem Internet) und seiner IP-Adresse. Beendest du das Programm, meldest du dich bei Windows ab oder geht der PC in den Ruhezustand, schaltet das Programm die Würfel sofort auf NO CARRIER.
+
+## 6. Weitere Einstellungen im Programm
+
+- Seite „Claude“: „Benachrichtigen, wenn das Limit knapp wird“ zeigt eine Windows-Meldung, wenn Session oder Woche eine Schwelle erreichen (70, 80, 90 oder 95 %, Standard 90 %). Höchstens eine Meldung pro Schwelle und Zeitraum. Standardmäßig aus.
+- Seite „Programm“: „Einmal täglich nach neuen Versionen suchen“ (standardmäßig aus) oder einmalig „Jetzt nach Updates suchen“ fragt bei GitHub nach neuem Programm und neuer Firmware. Beim installierten Programm erscheint dann „Jetzt aktualisieren“: Das Programm lädt das Setup, prüft es mit `SHA256SUMS.txt`, fragt nach, schaltet die Würfel auf NO CARRIER, installiert ohne Fenster und startet wieder. Eine neuere Firmware aus GitHub bietet die Seite „Würfel“ über „Firmware aktualisieren“ an, ebenfalls geprüft. Die portable Version zeigt nur den Hinweis und den Link.
+- Vor jedem Speichern sichert das Programm die alte `config.json` als `config.bak.json`. Ist `config.json` beim Start kaputt, nimmt es die Sicherung.
 
 Den Zugang zum Shop richtest du so ein (auf Englisch):
 

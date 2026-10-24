@@ -9,7 +9,7 @@ You need:
 
 ## Where the numbers come from
 
-The cube cannot fetch the limits by itself. The program on your PC reads the login of Claude Code from `%USERPROFILE%\.claude\.credentials.json`, asks Anthropic for your usage limits and sends only the percentages and reset times to the cube over your local network.
+The cube cannot fetch the limits by itself. The program on your PC reads the login of Claude Code from `%USERPROFILE%\.claude\.credentials.json`, asks Anthropic for your usage limits and draws them as a picture in the chosen design. Only that picture goes to the cube over your local network. Since firmware 0.5.0 the cube takes no numbers any more.
 
 The query uses an undocumented endpoint that Claude Code uses as well (the same as [CodexBar](https://github.com/steipete/CodexBar)). It is not an official interface. It can change or disappear at any time, and then the cube shows no new values.
 
@@ -38,9 +38,18 @@ Asking every 60 seconds made the server answer with error 429 (too many requests
 
 "Jetzt abfragen" (query now) asks at once, but never within 120 seconds after the last query. Until then the program sends the last values again.
 
-When a query fails, the display does not change at once. The program keeps sending the last valid values, so the cube knows that the PC is still running. It reports an error only after 3 failed queries in a row, or when the last valid values are older than 15 minutes. The cube then shows "NO CARRIER".
+When a query fails, the display does not change at once. The program keeps showing the last valid values. It reports an error only after 3 failed queries in a row, or when the last valid values are older than 15 minutes. The cube then shows "Keine Daten von Anthropic" with the time of the next try, in the colours of the design. NO CARRIER only appears when no pictures come from the program at all, see [Installation](installation.md#what-the-cube-shows-without-a-pc).
 
 After a restart of the program it waits until the interval has passed and a pause is over, and shows the stored values until then.
+
+## Notification when a limit gets close
+
+On the page Claude you can switch on "Benachrichtigen, wenn das Limit knapp wird" (notify when the limit gets close). It is off by default.
+
+- For the session and for the week choose a threshold of used percent: 70, 80, 90 or 95 %, 90 % by default, or "aus" (off).
+- When a fresh query reaches the threshold, Windows shows a message at the bottom right, for example "Claude: Session bei 91 %. Reset in 1:12." or "Claude: Woche bei 90 %. Reset Do 23:00."
+- Each limit gives at most one message per threshold and period: the session until its next reset, the week until the week reset. A restart of the program does not repeat it.
+- It works whether or not a cube shows Claude Limits. With the notification on, the program asks Anthropic in the same interval even if no cube shows Claude.
 
 ## What the program never does
 
