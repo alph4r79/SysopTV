@@ -22,6 +22,14 @@ using System.Web.Script.Serialization;
 
 namespace SysopTV.Tray
 {
+    // An error with a message that can be shown as it is.
+    internal sealed class ShopifyException : Exception
+    {
+        internal ShopifyException(string message) : base(message)
+        {
+        }
+    }
+
     internal sealed class ShopifyClient
     {
         internal const string ApiVersion = "2026-10";
@@ -45,7 +53,8 @@ namespace SysopTV.Tray
                 string token = Token(cfg, domain);
 
                 // Time zone of the shop: the offset in minutes is enough for day and month limits.
-                var shop = Query(domain, token, "{ shop { timezoneOffsetMinutes } }", null);
+                var shop = Query(domain, token, "{ shop { name timezoneOffsetMinutes } }", null);
+                result.ShopName = Dict(Dict(shop, "shop"), "name")["__value"] as string ?? "";
                 int offset = Convert.ToInt32(Dict(Dict(shop, "shop"), "timezoneOffsetMinutes")["__value"] ?? 0,
                                              CultureInfo.InvariantCulture);
                 DateTime shopNow = DateTime.UtcNow.AddMinutes(offset);
@@ -137,11 +146,62 @@ namespace SysopTV.Tray
                     "{ ordersCount(query:\"fulfillment_status:unshipped AND status:open AND test:false\", limit:null){ count } }", null);
                 result.Unshipped = Convert.ToInt32(Dict(open, "ordersCount")["count"], CultureInfo.InvariantCulture);
             }
-            catch (Exception ex)
+            catch (ShopifyException ex)
             {
                 result.Error = ex.Message;
             }
+            catch (System.Net.Http.HttpRequestException ex)
+            {
+                result.Error = "Shop nicht erreichbar: " + ClaudeClient.Describe(ex) + ". Stimmt die Shop-Adresse?";
+            }
+            catch (System.Threading.Tasks.TaskCanceledException)
+            {
+                result.Error = "Shopify antwortet nicht (Zeitüberschreitung).";
+            }
+            catch (Exception ex)
+            {
+                result.Error = "Unerwartete Antwort von Shopify (" + ex.GetType().Name + ").";
+            }
             return result;
+        }
+
+        // Plain words for what Shopify answers. Status 0 means an answer with
+        // an errors object in a 200 response. Public for the offline tests.
+        internal static string Explain(bool tokenRequest, int status, string body)
+        {
+            string b = body ?? "";
+            if (tokenRequest)
+            {
+                if (b.Contains("shop_not_permitted"))
+                {
+                    return "Shopify erlaubt Client-ID und Secret für diesen Shop nicht. App und Shop müssen zur selben Organisation gehören.";
+                }
+                if (status == 404)
+                {
+                    return "Shop nicht gefunden. Stimmt die Shop-Adresse (meinshop.myshopify.com)?";
+                }
+                return "Anmeldung abgelehnt (HTTP " + status + "): Client-ID oder Secret falsch, oder die App ist nicht im Shop installiert.";
+            }
+            if (b.Contains("read_orders") || b.Contains("Required access"))
+            {
+                return "Der App fehlt der Scope read_orders. Im Dev Dashboard eintragen, neue Version veröffentlichen und im Shop bestätigen.";
+            }
+            if (status == 401 || b.Contains("ACCESS_DENIED") || b.Contains("Invalid API key or access token"))
+            {
+                return "Zugang abgelehnt: Token oder Secret falsch, oder die App ist nicht im Shop installiert.";
+            }
+            switch (status)
+            {
+                case 402: return "Der Shop ist eingefroren (offene Rechnung bei Shopify).";
+                case 403: return "Shopify verweigert den Zugriff auf diesen Shop (HTTP 403).";
+                case 404: return "Shop nicht gefunden. Stimmt die Shop-Adresse (meinshop.myshopify.com)?";
+                case 423: return "Der Shop ist bei Shopify gesperrt (HTTP 423).";
+            }
+            if (b.Contains("SHOP_INACTIVE"))
+            {
+                return "Der Shop ist nicht aktiv.";
+            }
+            return status >= 500 ? "Fehler bei Shopify (HTTP " + status + "), später erneut." : "Shopify meldet einen Fehler (HTTP " + status + ").";
         }
 
         private static void Add(ShopPeriod p, bool inside, decimal amount)
@@ -178,7 +238,7 @@ namespace SysopTV.Tray
             string id = cfg.ClientId, secret = cfg.ClientSecret;
             if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(secret))
             {
-                throw new InvalidOperationException("kein Zugang eingetragen");
+                throw new ShopifyException("Kein Zugang eingetragen.");
             }
             var form = new FormUrlEncodedContent(new Dictionary<string, string>
             {
@@ -189,7 +249,7 @@ namespace SysopTV.Tray
                 string body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
                 if (!resp.IsSuccessStatusCode)
                 {
-                    throw new InvalidOperationException("Anmeldung bei Shopify: HTTP " + (int)resp.StatusCode);
+                    throw new ShopifyException(Explain(true, (int)resp.StatusCode, body));
                 }
                 var j = (Dictionary<string, object>)new JavaScriptSerializer().DeserializeObject(body);
                 cachedToken = (string)j["access_token"];
@@ -220,7 +280,7 @@ namespace SysopTV.Tray
                         }
                         if (!resp.IsSuccessStatusCode)
                         {
-                            throw new InvalidOperationException("Shopify: HTTP " + (int)resp.StatusCode);
+                            throw new ShopifyException(Explain(false, (int)resp.StatusCode, body));
                         }
                         var j = (Dictionary<string, object>)ser.DeserializeObject(body);
                         object errors;
@@ -231,13 +291,13 @@ namespace SysopTV.Tray
                                 Thread.Sleep(2000 * (attempt + 1));
                                 continue;
                             }
-                            throw new InvalidOperationException("Shopify meldet einen Fehler in der Abfrage");
+                            throw new ShopifyException(Explain(false, 200, ser.Serialize(errors)));
                         }
                         return Dict(j, "data");
                     }
                 }
             }
-            throw new InvalidOperationException("Shopify bremst, später erneut");
+            throw new ShopifyException("Shopify bremst, später erneut.");
         }
 
         // Child object; a plain value comes back under the key "__value".

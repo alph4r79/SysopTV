@@ -20,6 +20,23 @@ namespace SysopTV.Tray
     {
         internal int Used;        // percent used, 0 to 100
         internal long? ResetsAt;  // Unix seconds (UTC)
+
+        // A session without reset time is not running, like "nicht aktiv" in the firmware.
+        internal static bool Inactive(UsageLimit l, bool isSession)
+        {
+            return isSession && l != null && !l.ResetsAt.HasValue;
+        }
+
+        // "Session 27 %", "Session nicht aktiv", "Woche --": one place for status line, tooltip and log.
+        internal static string Short(UsageLimit l, bool isSession)
+        {
+            string name = isSession ? "Session " : "Woche ";
+            if (Inactive(l, isSession))
+            {
+                return name + "nicht aktiv";
+            }
+            return name + (l == null ? "--" : l.Used + " %");
+        }
     }
 
     internal sealed class UsageData
@@ -75,7 +92,7 @@ namespace SysopTV.Tray
             }
             var parts = new List<string>();
             parts.Add(Held ? "ok mit letzten Werten (" + Reason + ")" : "ok");
-            parts.Add(Session != null ? "Session " + Session.Used + " % verbraucht" : "keine Session-Daten");
+            parts.Add(Session == null ? "keine Session-Daten" : UsageLimit.Inactive(Session, true) ? "Session nicht aktiv" : "Session " + Session.Used + " % verbraucht");
             parts.Add(Week != null ? "Woche " + Week.Used + " % verbraucht" : "keine Wochen-Daten");
             return string.Join(", ", parts);
         }

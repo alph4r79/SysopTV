@@ -33,8 +33,21 @@ bool frameFinish();
 const char* frameError();
 
 // True while picture mode is on: a picture arrived within
-// SYSOPTV_FRAME_TIMEOUT_MS. While on, the designs must not draw.
+// SYSOPTV_FRAME_TIMEOUT_MS. While on, the designs must not draw, even if
+// usage data arrives as well. Pictures have priority.
 bool frameModeActive();
 
-// Ends picture mode at once, for example when usage data arrives.
-void frameModeEnd();
+// Remembers where the last complete picture came from, from the header
+// X-SysopTV-Source. The value may be percent encoded (UTF-8), it is decoded,
+// control characters are dropped and it is cut to SYSOPTV_FRAME_SOURCE_MAX
+// bytes without splitting a character. Empty if the header is missing.
+void frameSetSource(const char* value);
+
+// Source of the last picture, empty if none was named.
+const char* frameSource();
+
+// True if a picture arrived since the start.
+bool frameSeen();
+
+// Seconds since the last complete picture, 0 if none arrived yet.
+uint32_t frameAgeSeconds();

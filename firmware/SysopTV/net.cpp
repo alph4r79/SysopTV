@@ -259,7 +259,20 @@ static String ageText(uint32_t seconds) {
 }
 
 // Data state in one line. Texts in UTF-8, they also go into JSON.
+// Pictures count as data as well: while pictures come, the picture mode is
+// the state. "Keine Daten vom PC" only if neither numbers nor pictures came.
 static String dataStatus(bool& ok) {
+  if (frameModeActive()) {
+    ok = true;
+    String t = F("Bildmodus");
+    if (frameSource()[0]) {
+      t += F(": ");
+      t += frameSource();
+    }
+    t += F(", letztes Bild vor ");
+    t += ageText(frameAgeSeconds());
+    return t;
+  }
   UsageStatus st;
   usageGetStatus(st);
   ok = false;
@@ -940,9 +953,9 @@ static void handleUsage() {
     sendJsonError(400, error);
     return;
   }
+  // Pictures keep priority: the numbers are stored and only drawn once no
+  // picture came for SYSOPTV_FRAME_TIMEOUT_MS.
   usageApply(packet);
-  // Usage data instead of pictures: the cube draws its own designs again.
-  frameModeEnd();
   server.send(200, F("application/json"), F("{\"ok\":true}"));
 }
 
@@ -983,6 +996,13 @@ static void handleInfo() {
   doc["design"] = designGet(designActive()).name;
   doc["designCycle"] = settingsGet().cycleSeconds;
   doc["designText"] = designText();
+  if (frameSeen()) {
+    doc["frameSource"] = frameSource();
+    doc["frameAgeSeconds"] = frameAgeSeconds();
+  } else {
+    doc["frameSource"] = nullptr;
+    doc["frameAgeSeconds"] = nullptr;
+  }
   if (!rescueMode) {
     UsageView view;
     usageBuildView(view);
@@ -1198,6 +1218,7 @@ static void handleFrameDone() {
   } else if (frameFailure) {
     sendJsonError(400, frameFailure);
   } else {
+    frameSetSource(server.header("X-SysopTV-Source").c_str());
     server.send(200, F("application/json"), F("{\"ok\":true}"));
   }
   frameDenied = 0;
@@ -1322,7 +1343,7 @@ void netBegin(bool rescue) {
   }
 
   // Authorization is always collected by the web server, the API key header is extra.
-  server.collectHeaders("X-SysopTV-Key", "X-SysopTV-Client", "Content-Type");
+  server.collectHeaders("X-SysopTV-Key", "X-SysopTV-Client", "X-SysopTV-Source", "Content-Type");
 
   server.on("/", HTTP_GET, handleRoot);
   server.on("/password", HTTP_POST, handlePassword);

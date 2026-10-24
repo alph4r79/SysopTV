@@ -7,6 +7,7 @@ Firmware 0.4.0 and newer can show pictures that a PC draws. The PC sends a pictu
 - Method and path: `POST /api/frame`
 - Body: `multipart/form-data` with exactly one file part (any field name, for example `frame`). The file content is the SYF1 data described below. The web server of the cube can only stream file uploads, which is why the picture comes as a file.
 - Header `X-SysopTV-Key`: needed only if an API key is set on the cube, the same as for `/api/usage`.
+- Header `X-SysopTV-Source` (optional, since firmware 0.4.2): a short name of what the picture shows, for example `Claude als Bild: DOS` or `Shop: Kassenbon`. Non-ASCII characters are sent percent encoded as UTF-8 (`%C3%A4` for ä), the cube decodes them. At most 32 bytes are kept. The overview page of the cube shows it as "Bildmodus: <name>, letztes Bild vor 12 s", and `/api/info` returns it as `frameSource` together with `frameAgeSeconds` (both `null` before the first picture).
 - Answers: `200 {"ok":true}`, `400 {"ok":false,"error":"..."}` for broken data, `401` for a missing or wrong key, `503` in rescue mode.
 
 ## Data
@@ -44,8 +45,8 @@ Lines that were already complete before the error stay on the display.
 ## Behaviour
 
 - As soon as a picture has arrived completely, the cube is in picture mode: it only shows pictures and does not draw its own designs over them.
-- If no picture arrives for 3 minutes, it goes back to its own display without PC (clock or NO CARRIER with the IP address).
-- If usage data arrives at `/api/usage` instead, it leaves picture mode at once and draws its own designs again.
+- If no picture arrives for 3 minutes, it goes back to its own display: its chosen design if fresh numbers come over `/api/usage`, otherwise the display without PC (clock or NO CARRIER with the IP address).
+- Usage data at `/api/usage` does not end picture mode, pictures have priority (since firmware 0.4.2). The cube keeps the numbers, and when no picture came for 3 minutes, it draws its own chosen design with them. Only when no numbers come either, it shows the display without PC.
 - Brightness and night mode also apply in picture mode.
 
 ## Example

@@ -6,6 +6,8 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -13,6 +15,8 @@ namespace SysopTV.Tray
 {
     internal sealed class ShopifyPage : Page
     {
+        private const string GuideUrl = "https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard";
+
         private readonly TextBox domain = new TextBox { Width = 260 };
         private readonly TextBox displayName = new TextBox { Width = 260 };
         private readonly TextBox token = new TextBox { Width = 260, UseSystemPasswordChar = true };
@@ -41,7 +45,29 @@ namespace SysopTV.Tray
             AddRow(g, null, Row(test, testStatus));
             AddRow(g, "Letzte Abfrage", lastQuery);
             AddRow(g, "Heute", today);
-            Controls.Add(Stack(Heading("Shopify"), g,
+            var guide = new Label
+            {
+                Text = "Das Programm braucht eine eigene App im Shopify Dev Dashboard mit dem Scope read_orders, "
+                     + "installiert in deinem Shop. Aus den App-Einstellungen (Credentials) kommen Client-ID und Client-Secret "
+                     + "hier hinein, das Programm holt sich damit selbst einen Zugang. App und Shop müssen zur selben "
+                     + "Organisation gehören. Ein Admin-API-Token einer älteren Custom App geht auch.",
+                AutoSize = true,
+                MaximumSize = new Size(560, 0),
+                Margin = new Padding(0, 0, 0, 2)
+            };
+            var link = new LinkLabel { Text = "Anleitung bei Shopify: App im Dev Dashboard anlegen", AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
+            link.LinkClicked += (sender, e) =>
+            {
+                try
+                {
+                    Process.Start(GuideUrl);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(FindForm(), "Der Browser ließ sich nicht öffnen: " + ex.Message, "SysopTV");
+                }
+            };
+            Controls.Add(Stack(Heading("Shopify"), guide, link, g,
                 Note("Abgefragt werden alle 5 Minuten Bestellnummer, Uhrzeit, Betrag und Versandstatus der Bestellungen, keine Namen, Adressen oder E-Mail-Adressen. Stornierte und Testbestellungen zählen nicht.")));
 
             foreach (TextBox t in new[] { domain, displayName, token, clientId, secret })
@@ -102,7 +128,18 @@ namespace SysopTV.Tray
                 return;
             }
             test.Enabled = true;
-            testStatus.Text = d.Error != null ? "Fehler: " + d.Error : "Verbunden. " + Today(d);
+            testStatus.Text = TestText(d);
+        }
+
+        // Result of "Shop testen" in one line. Public for the offline tests.
+        internal static string TestText(ShopData d)
+        {
+            if (d.Error != null)
+            {
+                return "Fehler: " + d.Error;
+            }
+            string name = string.IsNullOrEmpty(d.ShopName) ? "dem Shop" : d.ShopName;
+            return "Verbunden mit " + name + ": heute " + ShopFormat.Orders(d.Today.Orders) + ", API-Version " + ShopifyClient.ApiVersion + ".";
         }
 
         private static string Today(ShopData d)

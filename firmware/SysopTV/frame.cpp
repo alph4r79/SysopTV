@@ -33,7 +33,9 @@ static uint16_t line[SIZE];
 static const char* error = "";
 
 static bool modeOn = false;
+static bool seen = false;
 static unsigned long lastFrame = 0;
+static char source[SYSOPTV_FRAME_SOURCE_MAX + 1] = "";
 
 static bool fail(const char* text) {
   phase = PHASE_ERROR;
@@ -165,6 +167,7 @@ bool frameFinish() {
     return fail(phase == PHASE_HEADER ? "Kopf unvollstaendig" : "zu wenige Pixel");
   }
   modeOn = true;
+  seen = true;
   lastFrame = millis();
   return true;
 }
@@ -180,6 +183,49 @@ bool frameModeActive() {
   return modeOn;
 }
 
-void frameModeEnd() {
-  modeOn = false;
+static int hexValue(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return -1;
+}
+
+void frameSetSource(const char* value) {
+  size_t n = 0;
+  for (const char* p = value; *p && n < SYSOPTV_FRAME_SOURCE_MAX; p++) {
+    uint8_t c = (uint8_t)*p;
+    if (c == '%' && hexValue(p[1]) >= 0 && hexValue(p[2]) >= 0) {
+      c = (uint8_t)(hexValue(p[1]) * 16 + hexValue(p[2]));
+      p += 2;
+    }
+    if (c < 0x20 || c == 0x7F) {
+      continue;
+    }
+    source[n++] = (char)c;
+  }
+  // Do not end inside a UTF-8 character: drop an incomplete last sequence.
+  size_t start = n;
+  while (start > 0 && ((uint8_t)source[start - 1] & 0xC0) == 0x80) {
+    start--;
+  }
+  if (start > 0 && ((uint8_t)source[start - 1] & 0x80)) {
+    uint8_t lead = (uint8_t)source[start - 1];
+    size_t need = (lead & 0xE0) == 0xC0 ? 2 : (lead & 0xF0) == 0xE0 ? 3 : (lead & 0xF8) == 0xF0 ? 4 : 0;
+    if (need == 0 || n - (start - 1) < need) {
+      n = start - 1;
+    }
+  }
+  source[n] = '\0';
+}
+
+const char* frameSource() {
+  return source;
+}
+
+bool frameSeen() {
+  return seen;
+}
+
+uint32_t frameAgeSeconds() {
+  return seen ? (millis() - lastFrame) / 1000 : 0;
 }

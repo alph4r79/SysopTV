@@ -46,6 +46,28 @@ namespace SysopTV.Tray
             return Capabilities.Contains(capability);
         }
 
+        // Firmware version at least major.minor.patch.
+        internal bool AtLeast(int major, int minor, int patch)
+        {
+            return CompareVersion(Version, major, minor, patch) >= 0;
+        }
+
+        internal static int CompareVersion(string version, int major, int minor, int patch)
+        {
+            string[] parts = (version ?? "").Split('.');
+            int[] want = { major, minor, patch };
+            for (int i = 0; i < 3; i++)
+            {
+                int v;
+                int.TryParse(i < parts.Length ? parts[i] : "0", NumberStyles.Integer, CultureInfo.InvariantCulture, out v);
+                if (v != want[i])
+                {
+                    return v < want[i] ? -1 : 1;
+                }
+            }
+            return 0;
+        }
+
         public override string ToString()
         {
             string name = !string.IsNullOrEmpty(DeviceName) ? DeviceName : Hostname;
@@ -82,7 +104,8 @@ namespace SysopTV.Tray
         }
 
         // The picture goes as the only file of a multipart upload, see docs/frame-format.md.
-        internal static SendResult SendFrame(string address, byte[] frame, string apiKey)
+        // source names the picture for the overview page of the cube (header X-SysopTV-Source).
+        internal static SendResult SendFrame(string address, byte[] frame, string apiKey, string source)
         {
             var form = new MultipartFormDataContent("sysoptv" + DateTime.Now.Ticks.ToString("x"));
             var file = new ByteArrayContent(frame);
@@ -94,10 +117,29 @@ namespace SysopTV.Tray
                 FileName = "\"frame.syf\""
             };
             form.Add(file);
-            return Post(address, "api/frame", form, apiKey);
+            return Post(address, "api/frame", form, apiKey, source);
         }
 
-        private static SendResult Post(string address, string path, HttpContent content, string apiKey)
+        // Header values travel as ASCII: everything else, and the percent sign
+        // itself, as percent encoded UTF-8. The firmware decodes it.
+        internal static string HeaderText(string s)
+        {
+            var sb = new StringBuilder();
+            foreach (byte b in Encoding.UTF8.GetBytes(s ?? ""))
+            {
+                if (b >= 0x20 && b < 0x7F && b != (byte)'%')
+                {
+                    sb.Append((char)b);
+                }
+                else
+                {
+                    sb.Append('%').Append(b.ToString("X2", CultureInfo.InvariantCulture));
+                }
+            }
+            return sb.ToString();
+        }
+
+        private static SendResult Post(string address, string path, HttpContent content, string apiKey, string source = null)
         {
             try
             {
@@ -107,6 +149,10 @@ namespace SysopTV.Tray
                     if (!string.IsNullOrEmpty(apiKey))
                     {
                         req.Headers.TryAddWithoutValidation("X-SysopTV-Key", apiKey);
+                    }
+                    if (!string.IsNullOrEmpty(source))
+                    {
+                        req.Headers.TryAddWithoutValidation("X-SysopTV-Source", HeaderText(source));
                     }
                     using (HttpResponseMessage resp = Http.SendAsync(req).GetAwaiter().GetResult())
                     {

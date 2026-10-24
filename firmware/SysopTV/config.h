@@ -4,7 +4,7 @@
 #pragma once
 #include <stdint.h>
 
-#define SYSOPTV_VERSION "0.4.1"
+#define SYSOPTV_VERSION "0.4.2"
 // Default device name and hotspot name get the last 4 hex digits of the chip
 // ID appended, so several cubes in one network have different names.
 #define SYSOPTV_NAME_PREFIX "sysoptv-"
@@ -40,6 +40,8 @@
 #define SYSOPTV_SETTINGS_MAX_BODY 1024
 // Picture mode (POST /api/frame): without a new picture for this long the
 // cube goes back to its own display.
+// Longest name of a picture source from the header X-SysopTV-Source, in bytes.
+#define SYSOPTV_FRAME_SOURCE_MAX 32
 #define SYSOPTV_FRAME_TIMEOUT_MS 180000UL
 // Without any packet for this long the screen shows NO CARRIER.
 #define SYSOPTV_USAGE_STALE_MS 600000UL

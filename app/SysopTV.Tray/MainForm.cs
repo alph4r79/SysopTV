@@ -68,6 +68,11 @@ namespace SysopTV.Tray
         {
         }
 
+        // Called each time the page is opened in the menu.
+        internal virtual void PageShown()
+        {
+        }
+
         // ---- layout helpers, the same look on every page ----
 
         protected static Label Heading(string text)
@@ -239,6 +244,7 @@ namespace SysopTV.Tray
             content.Controls.Clear();
             current = pages[index];
             content.Controls.Add(current);
+            current.PageShown();
             current.UpdateView();
         }
 

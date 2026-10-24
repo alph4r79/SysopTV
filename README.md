@@ -27,7 +27,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Firmware version 0.4.1, Windows program version 0.3.0.
+Firmware version 0.4.2, Windows program version 0.4.0.
 
 Tested on real hardware:
 
@@ -51,7 +51,8 @@ Not yet tested on real hardware, so there is no promise that these work:
 - `/api/settings` (new in 0.4.0)
 - picture mode with `/api/frame` (new in 0.4.0)
 - "nicht aktiv" for a session without reset time (new in 0.4.1)
-- the Windows program 0.3.0
+- the overview page in picture mode and the fall back to the own design with fresh numbers (new in 0.4.2)
+- the Windows program 0.4.0
 
 ## How it works
 
@@ -91,14 +92,14 @@ The Windows program SysopTV does the same as the PowerShell script, but runs in 
 It can feed several cubes. Each cube in the list gets one function:
 
 - **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
-- **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode).
+- **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode). With firmware 0.4.2 or newer the program also sends the numbers, so the cube can show its own design with real values when the pictures stop.
 - **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop as a picture, in one of four shop designs. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
 
 The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out.
 
 The program remembers the time of the last query, a pause after error 429 and the last valid values in `%LOCALAPPDATA%\SysopTV\state.json` (never the login key). After a restart it waits until the interval has passed and the pause is over, and shows the stored values until then.
 
-Version 0.3.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+Version 0.4.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
 
 ### Designs as pictures
 
@@ -136,12 +137,18 @@ The program is not signed. On the first start Windows SmartScreen may show "Der 
 At the top the window shows the state and the time of the last sending. On the left is a menu with these pages:
 
 - **Übersicht** (overview): one line per cube with name, function, design, last sending and state in colour, below the Claude values and the shop values of today.
-- **Würfel** (cubes): the list of cubes on the left with "Suchen" (search for cubes in your local network, a click on a result adds it), "Von Hand hinzufügen" (add by hand) and "Entfernen" (remove). On the right the selected cube: address, function, design, used or remaining, automatic change, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). Below that the settings stored in the cube itself: brightness, night mode, device name, and for "Claude, Würfel zeichnet selbst" also its design, change and used or remaining. They are read with "Vom Würfel laden" and written with "Auf dem Würfel speichern" (firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser).
+- **Würfel** (cubes): the list of cubes on the left with "Suchen" (search for cubes in your local network, a click on a result adds it), "Von Hand hinzufügen" (add by hand) and "Entfernen" (remove). On the right the selected cube in two parts:
+  - **Verbindung und Funktion** (connection and function): address, function, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). For "Claude als Bild" and "Shop als Bild" also the design, used or remaining (only Claude) and the automatic change.
+  - **Einstellungen im Würfel** (settings in the cube): brightness, night mode and device name, for "Claude, Würfel zeichnet selbst" also the design, change and used or remaining of the cube. With an admin password they are loaded on their own when the window opens, when you choose a cube and when you open the page. "Auf dem Würfel speichern" stays locked until the values were loaded, and after saving the program reads them back. "Neu laden" loads them again. This needs firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser.
+
+  Fields that do not count for the chosen function are hidden.
 - **Claude**: the interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429 with the time left, and "Jetzt abfragen" (query now, at most once in 120 seconds).
-- **Shopify**: shop address, the name for the display and the access (see "Shopify"), "Shop testen" (test the shop) and the last query.
+- **Shopify**: a short guide with a link to Shopify, shop address, the name for the display and the access (see "Shopify"), "Shop testen" (test the shop: shows the shop name, today's orders and the API version, or what went wrong) and the last query.
 - **Programm** (program): "Mit Windows starten" (start with Windows), the log folder, the version and the link to this repository.
 
-Settings of the program are saved as soon as you leave a field, there is no save button. Only the settings stored in the cube need "Auf dem Würfel speichern". The window fits on a screen of 1366 x 768 pixels, can be made larger, and long pages scroll.
+Settings of the program are saved as soon as you leave a field, there is no save button. Only the settings stored in the cube need "Auf dem Würfel speichern". The window fits on a screen of 1366 x 768 pixels and shows every page without scrolling at its start size. It can be made larger.
+
+When no session is running, the status line, the tooltip, the overview and the page Claude say "Session nicht aktiv".
 
 The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
 
@@ -162,12 +169,12 @@ From that it shows (in the time zone of the shop):
 - revenue and orders per day for the last 14 days
 - the number of open orders that are not shipped yet, and time and amount of the last order
 
-Shopify no longer lets you create new custom apps in the shop admin. For your own shop the official way is an app in the Shopify Dev Dashboard with the client credentials grant. Follow the official guides on shopify.dev, the menus there can change:
+Shopify no longer lets you create new custom apps in the shop admin. For your own shop the official way is an app in the Shopify Dev Dashboard with the client credentials grant. The steps with links to the official pages are in [docs/shopify-setup.md](docs/shopify-setup.md). Follow the official guides on shopify.dev, the menus there can change:
 
 - [Create apps using the Dev Dashboard](https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard): create the app, give its version the scope `read_orders`, release it and install it on your shop.
 - [Client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant): the app settings show a client ID and a client secret. Enter both in SysopTV. The program gets a token with them itself, which lasts 24 hours and is renewed when needed. This only works if the app and the shop belong to the same Shopify organization.
 
-If you still have an older custom app from the shop admin, its Admin API access token (it starts with `shpat_`) works as well. Enter it in the field "Admin-API-Zugriffstoken" instead of client ID and secret, see [Shopify: admin-created custom apps](https://shopify.dev/docs/apps/build/authentication-authorization/legacy/admin-custom-apps).
+If you still have an older custom app from the shop admin, its Admin API access token works as well. Enter it in the field "Admin-API-Zugriffstoken" instead of client ID and secret, see [Shopify: admin-created custom apps](https://shopify.dev/docs/apps/build/authentication-authorization/legacy/admin-custom-apps).
 
 ## Setting up the PowerShell script
 
@@ -278,14 +285,14 @@ The name can be changed under "Einstellungen" (settings), section "Gerät" (devi
 
 These are used by the Windows program. They are documented here for anyone who wants to write their own sender.
 
-- `GET /api/info` (always open): status as JSON. Since 0.4.0 also `deviceName` and `capabilities` (`["usage","settings","frame"]`).
+- `GET /api/info` (always open): status as JSON. Since 0.4.0 also `deviceName` and `capabilities` (`["usage","settings","frame"]`), since 0.4.2 `frameSource` and `frameAgeSeconds` (name and age of the last picture, `null` before the first one).
 - `POST /api/usage`: usage data from the sender, see the existing senders. Needs the header `X-SysopTV-Key` if an API key is set.
 - `GET /api/settings` and `POST /api/settings`: the display settings as JSON (design, automatic change, used or remaining, brightness, night mode, device name). Both need the admin password (HTTP Basic Auth) if one is set. `POST` only works with `Content-Type: application/json` and the header `X-SysopTV-Client: app`, otherwise the cube answers 400. All fields are optional, the values are checked like on the settings page. The answer contains the stored values. The cube allows no cross-origin requests (no CORS), so web pages cannot use this interface.
-- `POST /api/frame`: picture mode, see below.
+- `POST /api/frame`: picture mode, see below. Since 0.4.2 with the optional header `X-SysopTV-Source`, a short name of the picture for the overview page.
 
 ## Picture mode
 
-Since firmware 0.4.0 a PC can draw the whole screen itself and send it as a picture. The cube then only shows these pictures and does not draw its own designs over them. If no picture arrives for 3 minutes, it shows its own display without PC (clock or NO CARRIER with the IP address). If usage data arrives again instead of pictures, it draws its own designs again. Brightness and night mode also apply in picture mode.
+Since firmware 0.4.0 a PC can draw the whole screen itself and send it as a picture. The cube then only shows these pictures and does not draw its own designs over them. Pictures have priority over numbers. Since firmware 0.4.2 numbers sent at the same time are kept: if no picture arrives for 3 minutes, the cube draws its own chosen design with them. Only when no numbers come either, it shows its own display without PC (clock or NO CARRIER with the IP address). The overview page of the cube shows "Bildmodus" with the name of the picture and its age while pictures come, and warns about missing data only when neither pictures nor numbers arrive. Brightness and night mode also apply in picture mode.
 
 The pictures are sent as a small, run length compressed format, also as parts of the screen. The format is described in [docs/frame-format.md](docs/frame-format.md).
 

@@ -40,6 +40,7 @@ namespace SysopTV.Tray
         internal int Unshipped;
         internal DateTime? LastOrderTime;              // shop time
         internal decimal LastOrderAmount;
+        internal string ShopName = "";                 // name of the shop at Shopify
         internal DateTime ShopNow;                     // shop time when the data was read
         internal DateTime FetchedAt;                   // PC time when the data was read
         internal string Error;                         // null if fine

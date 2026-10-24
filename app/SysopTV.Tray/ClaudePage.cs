@@ -85,11 +85,15 @@ namespace SysopTV.Tray
             Ctx.Service.SendNow();
         }
 
-        private static string Limit(UsageLimit l, bool isSession)
+        internal static string Limit(UsageLimit l, bool isSession)
         {
             if (l == null)
             {
                 return "keine Daten";
+            }
+            if (UsageLimit.Inactive(l, isSession))
+            {
+                return "nicht aktiv";
             }
             ViewColumn c = UsageView.Column(l, isSession, true, DateTimeOffset.Now);
             return l.Used + " % verbraucht, " + (100 - l.Used) + " % übrig, " + c.ResetLine;
@@ -111,7 +115,7 @@ namespace SysopTV.Tray
                     lines.Add("Noch keine Werte.");
                     return lines.ToArray();
                 }
-                lines.Add("Session: " + Limit(ok.Session, true));
+                lines.Add(UsageLimit.Inactive(ok.Session, true) ? "Session nicht aktiv" : "Session: " + Limit(ok.Session, true));
                 lines.Add("Woche: " + Limit(ok.Week, false));
                 lines.Add("Stand " + Time(Ctx.Service.LastOkTime));
                 return lines.ToArray();

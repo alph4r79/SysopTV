@@ -67,6 +67,7 @@ namespace SysopTV.Tray
             internal SendResult LastResult;
             internal DateTime? LastSend;
             internal string ShownDesign;
+            internal string Firmware;  // version from /api/info, null until known
         }
 
         private readonly ClaudeClient claude = new ClaudeClient();
@@ -313,7 +314,7 @@ namespace SysopTV.Tray
                         lastSummary = summary;
                     }
                     string json = data.ToJson(DateTimeOffset.Now);
-                    foreach (CubeEntry c in cfg.Cubes.Where(c => c.Function == CubeFunction.Usage))
+                    foreach (CubeEntry c in cfg.Cubes.Where(c => c.Function == CubeFunction.Usage || NumbersWelcome(c)))
                     {
                         Remember(c, Cube.SendUsage(c.Address, json, c.ApiKey));
                     }
@@ -387,6 +388,40 @@ namespace SysopTV.Tray
             }
         }
 
+        // "Claude als Bild" gets the numbers as well, so the cube can fall back to
+        // its own design. Only firmware 0.4.2 and newer keeps pictures in front of
+        // the numbers; older firmware would leave picture mode on every packet.
+        private bool NumbersWelcome(CubeEntry c)
+        {
+            if (c.Function != CubeFunction.ClaudeFrame)
+            {
+                return false;
+            }
+            CubeState st;
+            lock (gate)
+            {
+                st = StateFor(c);
+            }
+            if (st.Firmware == null)
+            {
+                CubeInfo info = Cube.GetInfo(c.Address, TimeSpan.FromSeconds(3));
+                if (info == null)
+                {
+                    return false;
+                }
+                st.Firmware = info.Version;
+            }
+            return CubeInfo.CompareVersion(st.Firmware, 0, 4, 2) >= 0;
+        }
+
+        // Name of the picture for the overview page of the cube.
+        internal static string SourceText(CubeEntry c, string design)
+        {
+            DesignInfo d = (c.Designs ?? new DesignInfo[0]).FirstOrDefault(x => x.Id == design);
+            string label = d != null ? d.Label : design;
+            return c.Function == CubeFunction.ShopFrame ? "Shop: " + label : "Claude als Bild: " + label;
+        }
+
         private CubeState StateFor(CubeEntry c)
         {
             CubeState s;
@@ -436,6 +471,7 @@ namespace SysopTV.Tray
                                 full = true;
                             }
                             st.LastUptime = info.Uptime;
+                            st.Firmware = info.Version;
                         }
                     }
                     List<Rectangle> parts = full ? new List<Rectangle> { new Rectangle(0, 0, Canvas.Size, Canvas.Size) }
@@ -447,7 +483,7 @@ namespace SysopTV.Tray
                     SendResult r = null;
                     foreach (Rectangle part in parts)
                     {
-                        r = Cube.SendFrame(c.Address, FrameCodec.Encode(canvas, part), c.ApiKey);
+                        r = Cube.SendFrame(c.Address, FrameCodec.Encode(canvas, part), c.ApiKey, SourceText(c, design));
                         if (!r.Ok)
                         {
                             break;
@@ -579,7 +615,7 @@ namespace SysopTV.Tray
             string values = null;
             if (data != null && data.State == "ok")
             {
-                values = "Session " + Percent(data.Session) + ", Woche " + Percent(data.Week) + " verbraucht";
+                values = UsageLimit.Short(data.Session, true) + ", " + UsageLimit.Short(data.Week, false) + " verbraucht";
             }
             if (failed.Count > 0)
             {
@@ -625,11 +661,6 @@ namespace SysopTV.Tray
             {
                 handler();
             }
-        }
-
-        private static string Percent(UsageLimit l)
-        {
-            return l == null ? "--" : l.Used + " %";
         }
 
         private static bool Low(UsageLimit l)

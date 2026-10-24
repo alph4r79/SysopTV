@@ -1,10 +1,11 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Page "Würfel": the list of cubes on the left, the details of the selected
-// cube on the right. The upper part is stored in the program and saved as
-// soon as a field is left. The lower part is stored in the cube itself and
-// only changed with "Auf dem Würfel speichern".
+// Page "Würfel": the list of cubes on the left, the selected cube on the
+// right in two parts. "Verbindung und Funktion" is stored in the program and
+// saved as soon as a field is left. "Einstellungen im Würfel" is stored in the
+// cube: loaded on its own when an admin password is set, and written only with
+// "Auf dem Würfel speichern", which stays locked until a load worked.
 
 using System;
 using System.Collections.Generic;
@@ -22,14 +23,15 @@ namespace SysopTV.Tray
         private static readonly string[] CycleLabels = { "aus", "alle 30 Sekunden", "alle 60 Sekunden" };
 
         // List
-        private readonly ListBox list = new ListBox { Width = 180, Height = 160, IntegralHeight = false };
-        private readonly Button searchButton = new Button { Text = "Suchen", AutoSize = true };
-        private readonly Button addButton = new Button { Text = "Von Hand hinzufügen", AutoSize = true };
-        private readonly Button removeButton = new Button { Text = "Entfernen", AutoSize = true };
+        private readonly ListBox list = new ListBox { Width = 180, Height = 150, IntegralHeight = false };
+        private readonly Button searchButton = new Button { Text = "Suchen" };
+        private readonly Button addButton = new Button { Text = "Von Hand hinzufügen" };
+        private readonly Button removeButton = new Button { Text = "Entfernen" };
         private readonly ListBox found = new ListBox { Width = 180, Height = 80, IntegralHeight = false, Visible = false };
         private readonly Label listStatus = new Label { AutoSize = true, MaximumSize = new Size(180, 0), ForeColor = SystemColors.GrayText };
 
-        // Stored in the program
+        // Verbindung und Funktion (stored in the program)
+        private readonly TableLayoutPanel connGrid = Grid();
         private readonly TextBox address = new TextBox { Width = 240 };
         private readonly ComboBox function = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
         private readonly ComboBox design = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
@@ -39,32 +41,31 @@ namespace SysopTV.Tray
         private readonly TextBox apiKey = new TextBox { Width = 240, UseSystemPasswordChar = true };
         private readonly TextBox adminPassword = new TextBox { Width = 240, UseSystemPasswordChar = true };
         private readonly Button testButton = new Button { Text = "Verbindung testen", AutoSize = true };
-        private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 6, 0, 0) };
-        private readonly Label designNote = new Label { AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 4, 0, 4) };
-        private readonly TableLayoutPanel details = Grid();
+        private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(190, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(6, 3, 0, 0) };
         private Control designRow, modeRow, cycleRow;
 
-        // Stored in the cube
-        private readonly Panel cubePanel = new Panel { AutoSize = true };
-        private readonly Panel browserPanel = new Panel { AutoSize = true, Visible = false };
+        // Einstellungen im Würfel (stored in the cube)
         private readonly TableLayoutPanel cubeGrid = Grid();
+        private readonly Panel browserPanel = new Panel { AutoSize = true, Visible = false };
         private readonly ComboBox fwDesign = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         private readonly ComboBox fwCycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         private readonly RadioButton fwUsed = new RadioButton { Text = "verbraucht", AutoSize = true };
         private readonly RadioButton fwLeft = new RadioButton { Text = "übrig", AutoSize = true };
         private readonly NumericUpDown brightness = new NumericUpDown { Minimum = 10, Maximum = 100, Increment = 5, Width = 60 };
-        private readonly CheckBox night = new CheckBox { Text = "an", AutoSize = true, Margin = new Padding(0, 4, 8, 0) };
+        private readonly CheckBox night = new CheckBox { Text = "an", AutoSize = true, Margin = new Padding(0, 5, 8, 0) };
         private readonly TextBox nightFrom = new TextBox { Width = 50 };
         private readonly TextBox nightTo = new TextBox { Width = 50 };
         private readonly NumericUpDown nightBrightness = new NumericUpDown { Minimum = 0, Maximum = 100, Increment = 5, Width = 60 };
         private readonly TextBox deviceName = new TextBox { Width = 180, MaxLength = 24 };
-        private readonly Button loadSettings = new Button { Text = "Vom Würfel laden", AutoSize = true };
-        private readonly Button saveSettings = new Button { Text = "Auf dem Würfel speichern", AutoSize = true };
-        private readonly Label settingsStatus = new Label { AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 6, 0, 0) };
+        private readonly Button reloadButton = new Button { Text = "Neu laden", AutoSize = true };
+        private readonly Button saveButton = new Button { Text = "Auf dem Würfel speichern", AutoSize = true };
+        private readonly Label settingsStatus = new Label { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 2, 0, 4) };
         private Control fwDesignRow, fwCycleRow, fwModeRow;
 
         private CubeEntry selected;
-        private CubeSettings loaded;
+        private CubeSettings loaded;      // values of the selected cube, null until a load worked
+        private int loadToken;            // a newer load makes older answers worthless
+        private bool busy;
         private bool filling;
         private readonly Dictionary<string, CubeInfo> infos = new Dictionary<string, CubeInfo>();
         private CancellationTokenSource searchCancel;
@@ -76,33 +77,30 @@ namespace SysopTV.Tray
 
             var left = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Margin = new Padding(0, 0, 16, 0) };
             left.Controls.Add(list);
-            left.Controls.Add(Stack(searchButton, addButton, removeButton));
-            left.Controls.Add(found);
-            left.Controls.Add(listStatus);
             foreach (Button b in new[] { searchButton, addButton, removeButton })
             {
                 b.Width = 180;
-                b.AutoSize = false;
                 b.Height = 28;
                 b.Margin = new Padding(0, 4, 0, 0);
+                left.Controls.Add(b);
             }
+            left.Controls.Add(found);
+            left.Controls.Add(listStatus);
 
-            AddRow(details, "Adresse (IP oder Name)", address);
-            AddRow(details, "Funktion", function);
-            designRow = Row(design);
-            AddRow(details, "Design", designRow);
+            AddRow(connGrid, "Adresse (IP oder Name)", address);
+            AddRow(connGrid, "Funktion", function);
+            designRow = design;
+            AddRow(connGrid, "Design", designRow);
             modeRow = Row(showUsed, showLeft);
-            AddRow(details, "Prozent zeigen", modeRow);
-            cycleRow = Row(cycle);
-            AddRow(details, "Automatisch wechseln", cycleRow);
-            AddRow(details, null, designNote);
-            AddRow(details, "API-Schlüssel (optional)", apiKey);
-            AddRow(details, "Admin-Passwort", adminPassword);
-            AddRow(details, null, testButton);
-            AddRow(details, null, cubeStatus);
+            AddRow(connGrid, "Prozent zeigen", modeRow);
+            cycleRow = cycle;
+            AddRow(connGrid, "Automatisch wechseln", cycleRow);
+            AddRow(connGrid, "API-Schlüssel (optional)", apiKey);
+            AddRow(connGrid, "Admin-Passwort", adminPassword);
+            AddRow(connGrid, null, Row(testButton, cubeStatus));
 
             fwDesignRow = fwDesign;
-            AddRow(cubeGrid, "Design im Würfel", fwDesignRow);
+            AddRow(cubeGrid, "Design", fwDesignRow);
             fwCycleRow = fwCycle;
             AddRow(cubeGrid, "Automatisch wechseln", fwCycleRow);
             fwModeRow = Row(fwUsed, fwLeft);
@@ -111,10 +109,6 @@ namespace SysopTV.Tray
             AddRow(cubeGrid, "Nachtmodus", Row(night, Caption("von"), nightFrom, Caption("bis"), nightTo));
             AddRow(cubeGrid, "Helligkeit nachts", Row(nightBrightness, Caption("%")));
             AddRow(cubeGrid, "Gerätename", deviceName);
-            AddRow(cubeGrid, null, Row(loadSettings, saveSettings));
-            AddRow(cubeGrid, null, settingsStatus);
-            cubeGrid.Dock = DockStyle.Fill;
-            cubePanel.Controls.Add(cubeGrid);
 
             var info = Note("Dieser Würfel hat noch keine Schnittstelle für Einstellungen (ab Firmware 0.4.0). Die Seite im Browser kann alles einstellen.");
             var open = new Button { Text = "Einstellungen am Würfel öffnen", AutoSize = true, Top = 40 };
@@ -122,13 +116,12 @@ namespace SysopTV.Tray
             browserPanel.Controls.Add(info);
             browserPanel.Controls.Add(open);
 
-            var right = Stack(details, new Label
-            {
-                Text = "Im Würfel gespeichert",
-                AutoSize = true,
-                Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold),
-                Margin = new Padding(0, 8, 0, 4)
-            }, cubePanel, browserPanel);
+            // The buttons sit in the header of their part, so they never slide out of view.
+            var cubeHeader = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+            cubeHeader.Controls.Add(SectionTitle("Einstellungen im Würfel"), 0, 0);
+            cubeHeader.Controls.Add(Row(reloadButton, saveButton), 1, 0);
+
+            var right = Stack(SectionTitle("Verbindung und Funktion"), connGrid, Line(), cubeHeader, settingsStatus, cubeGrid, browserPanel);
             right.Dock = DockStyle.None;
 
             var columns = new TableLayoutPanel { ColumnCount = 2, AutoSize = true };
@@ -154,14 +147,22 @@ namespace SysopTV.Tray
             // Program settings: saved when a field is left or a choice changes.
             address.Leave += (s, e) => Commit();
             apiKey.Leave += (s, e) => Commit();
-            adminPassword.Leave += (s, e) => Commit();
+            adminPassword.Leave += (s, e) =>
+            {
+                bool changed = adminPassword.Text != (selected != null ? selected.AdminPassword : "");
+                Commit();
+                if (changed)
+                {
+                    var _ = LoadCubeSettings();
+                }
+            };
             function.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
             design.SelectedIndexChanged += (s, e) => Commit();
             showUsed.CheckedChanged += (s, e) => Commit();
             cycle.SelectedIndexChanged += (s, e) => Commit();
 
-            loadSettings.Click += async (s, e) => await LoadCubeSettings();
-            saveSettings.Click += async (s, e) => await SaveCubeSettings();
+            reloadButton.Click += async (s, e) => await LoadCubeSettings();
+            saveButton.Click += async (s, e) => await SaveCubeSettings();
             Disposed += (s, e) =>
             {
                 if (searchCancel != null)
@@ -173,11 +174,47 @@ namespace SysopTV.Tray
             {
                 list.SelectedIndex = 0;
             }
+            else
+            {
+                SelectCube();
+            }
         }
 
         internal override string Title
         {
             get { return "Würfel"; }
+        }
+
+        // Opening the page loads the settings of the selected cube again.
+        internal override void PageShown()
+        {
+            if (selected != null && !busy)
+            {
+                var _ = LoadCubeSettings();
+            }
+        }
+
+        // "Auf dem Würfel speichern" only after a load worked and while nothing runs.
+        internal static bool CanSave(CubeSettings loaded, bool busy)
+        {
+            return loaded != null && !busy;
+        }
+
+        private static Label SectionTitle(string text)
+        {
+            return new Label
+            {
+                Text = text,
+                AutoSize = true,
+                Font = new Font(SystemFonts.MessageBoxFont, FontStyle.Bold),
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 6, 16, 4)
+            };
+        }
+
+        private static Label Line()
+        {
+            return new Label { Height = 1, Width = 440, BackColor = SystemColors.ControlDark, Margin = new Padding(0, 4, 0, 0) };
         }
 
         private sealed class Item
@@ -265,15 +302,17 @@ namespace SysopTV.Tray
             var item = list.SelectedItem as Item;
             selected = item != null ? item.Cube : null;
             loaded = null;
+            loadToken++;
             bool on = selected != null;
-            foreach (Control c in new Control[] { address, function, design, showUsed, showLeft, cycle, apiKey, adminPassword, testButton, removeButton, loadSettings, saveSettings })
+            foreach (Control c in new Control[] { address, function, design, showUsed, showLeft, cycle, apiKey, adminPassword, testButton, removeButton, reloadButton })
             {
                 c.Enabled = on;
             }
             cubeStatus.Text = "";
-            settingsStatus.Text = "";
+            UpdateSaveButton();
             if (!on)
             {
+                settingsStatus.Text = "";
                 return;
             }
             filling = true;
@@ -290,9 +329,10 @@ namespace SysopTV.Tray
             ShowFunctionRows();
             ShowCubeArea(info);
             ClearCubeFields();
+            var _ = LoadCubeSettings();
             if (info == null && selected.Address.Length > 0)
             {
-                var _ = TestCube();
+                var __ = TestCube();
             }
         }
 
@@ -313,7 +353,18 @@ namespace SysopTV.Tray
             function.SelectedIndex = Math.Max(0, values.IndexOf(selected.Function));
         }
 
-        // Design, mode and change in the program only for pictures; for "usage" the cube decides.
+        private static void ShowRow(TableLayoutPanel grid, Control c, bool visible)
+        {
+            c.Visible = visible;
+            Control caption = grid.GetControlFromPosition(0, grid.GetRow(c));
+            if (caption != null)
+            {
+                caption.Visible = visible;
+            }
+        }
+
+        // Only the fields that count for the function. For pictures the program
+        // decides design, mode and change; for "usage" the cube does.
         private void ShowFunctionRows()
         {
             if (selected == null)
@@ -330,33 +381,54 @@ namespace SysopTV.Tray
                 design.SelectedItem = selected.Designs.First(d => d.Id == selected.DesignOrDefault);
             }
             filling = false;
-            designRow.Enabled = cycleRow.Enabled = picture;
-            modeRow.Enabled = claude;
-            designNote.Text = picture
-                ? "Das Programm zeichnet das Bild selbst."
-                : "Das stellt der Würfel selbst ein, siehe unten.";
-            fwDesignRow.Visible = fwCycleRow.Visible = fwModeRow.Visible = !picture;
-            foreach (Control c in new[] { fwDesignRow, fwCycleRow, fwModeRow })
-            {
-                cubeGrid.GetControlFromPosition(0, cubeGrid.GetRow(c)).Visible = !picture;
-            }
+            SuspendLayout();
+            ShowRow(connGrid, designRow, picture);
+            ShowRow(connGrid, modeRow, claude);
+            ShowRow(connGrid, cycleRow, picture);
+            ShowRow(cubeGrid, fwDesignRow, !picture);
+            ShowRow(cubeGrid, fwCycleRow, !picture);
+            ShowRow(cubeGrid, fwModeRow, !picture);
+            ResumeLayout();
         }
 
         private void ShowCubeArea(CubeInfo info)
         {
             bool api = info == null || info.Can("settings");
-            cubePanel.Visible = api;
+            cubeGrid.Visible = api;
+            reloadButton.Visible = saveButton.Visible = api;
             browserPanel.Visible = !api;
+            settingsStatus.Visible = api;
+        }
+
+        // Design names of the cube, or the built-in list, never an empty list.
+        internal static string[] DesignNames(CubeSettings s)
+        {
+            if (s != null && s.DesignNames.Count > 0)
+            {
+                return s.DesignNames.ToArray();
+            }
+            return ClaudeDesigns.All.Select(d => d.Label).ToArray();
         }
 
         private void ClearCubeFields()
         {
             fwDesign.Items.Clear();
-            fwCycle.SelectedIndex = -1;
-            fwUsed.Checked = fwLeft.Checked = false;
+            fwDesign.Items.AddRange(DesignNames(null));
+            fwDesign.SelectedIndex = 0;
+            fwCycle.SelectedIndex = 0;
+            fwUsed.Checked = true;
+            fwLeft.Checked = false;
             night.Checked = false;
             nightFrom.Text = nightTo.Text = deviceName.Text = "";
-            settingsStatus.Text = "Mit „Vom Würfel laden“ die Werte holen.";
+        }
+
+        // The fields of the cube are only editable with loaded values, so nothing
+        // that looks like a setting is a mere placeholder.
+        private void UpdateSaveButton()
+        {
+            cubeGrid.Enabled = selected != null && loaded != null;
+            saveButton.Enabled = selected != null && CanSave(loaded, busy);
+            reloadButton.Enabled = selected != null && !busy;
         }
 
         private void AddCube(CubeEntry entry, bool focusAddress)
@@ -463,7 +535,7 @@ namespace SysopTV.Tray
                 return;
             }
             testButton.Enabled = false;
-            cubeStatus.Text = "Verbinde mit " + c.Address + " ...";
+            cubeStatus.Text = "Verbinde ...";
             CubeInfo info = await Task.Run(() => Cube.GetInfo(c.Address, TimeSpan.FromSeconds(4)));
             if (IsDisposed)
             {
@@ -476,7 +548,7 @@ namespace SysopTV.Tray
             }
             if (info == null)
             {
-                cubeStatus.Text = "Unter " + c.Address + " antwortet kein SysopTV.";
+                cubeStatus.Text = "Keine Antwort von SysopTV.";
                 return;
             }
             infos[c.Address] = info;
@@ -486,10 +558,11 @@ namespace SysopTV.Tray
                 RefreshList();
                 Ctx.Save();
             }
-            cubeStatus.Text = "Verbunden: SysopTV " + info.Version + ", Laufzeit " + info.UptimeText + (info.Rescue ? ", Rettungsmodus" : "");
+            cubeStatus.Text = "Firmware " + info.Version + ", Laufzeit " + info.UptimeText + (info.Rescue ? ", Rettungsmodus" : "");
             filling = true;
             FillFunctions(info);
             filling = false;
+            ShowFunctionRows();
             ShowCubeArea(info);
         }
 
@@ -508,63 +581,88 @@ namespace SysopTV.Tray
 
         // ---- settings stored in the cube, over /api/settings ----
 
-        private async Task LoadCubeSettings()
+        // Loads without asking when an admin password is set. A failed load keeps
+        // saving locked, the error stands next to the buttons.
+        private async Task<bool> LoadCubeSettings()
         {
-            Commit();
             CubeEntry c = selected;
-            if (c == null || c.Address.Length == 0)
+            if (c == null)
             {
-                return;
+                return false;
             }
+            int token = ++loadToken;
+            loaded = null;
+            UpdateSaveButton();
+            if (c.Address.Length == 0)
+            {
+                settingsStatus.Text = "Ohne Adresse lässt sich nichts laden.";
+                return false;
+            }
+            if (c.AdminPassword.Length == 0)
+            {
+                settingsStatus.Text = "Zum Laden bitte oben das Admin-Passwort eintragen.";
+                return false;
+            }
+            busy = true;
+            UpdateSaveButton();
             settingsStatus.Text = "Lade ...";
+            CubeSettings s = null;
+            string error = null;
             try
             {
-                CubeSettings s = await Task.Run(() => Cube.GetSettings(c.Address, c.AdminPassword));
-                if (c != selected || IsDisposed)
-                {
-                    return;
-                }
-                loaded = s;
-                fwDesign.Items.Clear();
-                foreach (string n in s.DesignNames)
-                {
-                    fwDesign.Items.Add(n);
-                }
-                if (fwDesign.Items.Count > 0)
-                {
-                    fwDesign.SelectedIndex = Math.Min(Math.Max(0, s.Design), fwDesign.Items.Count - 1);
-                }
-                fwCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, s.CycleSeconds));
-                fwUsed.Checked = s.ShowUsed;
-                fwLeft.Checked = !s.ShowUsed;
-                brightness.Value = Math.Min(100, Math.Max(10, s.Brightness));
-                night.Checked = s.NightEnabled;
-                nightFrom.Text = s.NightFrom;
-                nightTo.Text = s.NightTo;
-                nightBrightness.Value = Math.Min(100, Math.Max(0, s.NightBrightness));
-                deviceName.Text = s.DeviceName;
-                settingsStatus.Text = "Geladen.";
+                s = await Task.Run(() => Cube.GetSettings(c.Address, c.AdminPassword));
             }
             catch (InvalidOperationException ex)
             {
-                settingsStatus.Text = ex.Message;
+                error = ex.Message;
             }
+            if (IsDisposed || token != loadToken || c != selected)
+            {
+                return false;
+            }
+            busy = false;
+            if (s == null)
+            {
+                settingsStatus.Text = "Laden fehlgeschlagen: " + error;
+                UpdateSaveButton();
+                return false;
+            }
+            ShowLoaded(s);
+            settingsStatus.Text = "Geladen um " + DateTime.Now.ToString("HH:mm:ss") + ".";
+            UpdateSaveButton();
+            return true;
+        }
+
+        private void ShowLoaded(CubeSettings s)
+        {
+            loaded = s;
+            fwDesign.Items.Clear();
+            fwDesign.Items.AddRange(DesignNames(s));
+            fwDesign.SelectedIndex = Math.Min(Math.Max(0, s.Design), fwDesign.Items.Count - 1);
+            fwCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, s.CycleSeconds));
+            fwUsed.Checked = s.ShowUsed;
+            fwLeft.Checked = !s.ShowUsed;
+            brightness.Value = Math.Min(100, Math.Max(10, s.Brightness));
+            night.Checked = s.NightEnabled;
+            nightFrom.Text = s.NightFrom;
+            nightTo.Text = s.NightTo;
+            nightBrightness.Value = Math.Min(100, Math.Max(0, s.NightBrightness));
+            deviceName.Text = s.DeviceName;
         }
 
         private async Task SaveCubeSettings()
         {
             Commit();
             CubeEntry c = selected;
-            if (c == null || loaded == null)
+            if (c == null || !CanSave(loaded, busy))
             {
-                settingsStatus.Text = "Bitte zuerst vom Würfel laden.";
                 return;
             }
             bool usage = c.Function == CubeFunction.Usage;
             var s = new CubeSettings
             {
                 // For picture cubes the design settings of the cube stay as they were.
-                Design = usage && fwDesign.SelectedIndex >= 0 ? fwDesign.SelectedIndex : loaded.Design,
+                Design = usage ? fwDesign.SelectedIndex : loaded.Design,
                 CycleSeconds = usage ? CubeEntry.CycleChoices[Math.Max(0, fwCycle.SelectedIndex)] : loaded.CycleSeconds,
                 ShowUsed = usage ? fwUsed.Checked : loaded.ShowUsed,
                 Brightness = (int)brightness.Value,
@@ -574,22 +672,39 @@ namespace SysopTV.Tray
                 NightBrightness = (int)nightBrightness.Value,
                 DeviceName = deviceName.Text.Trim()
             };
+            busy = true;
+            UpdateSaveButton();
             settingsStatus.Text = "Speichere ...";
+            string error = null;
             try
             {
-                CubeSettings saved = await Task.Run(() => Cube.SaveSettings(c.Address, c.AdminPassword, s));
-                loaded = saved;
-                if (saved.DeviceName != c.Name)
-                {
-                    c.Name = saved.DeviceName;
-                    RefreshList();
-                    Ctx.Save();
-                }
-                settingsStatus.Text = "Auf dem Würfel gespeichert.";
+                await Task.Run(() => Cube.SaveSettings(c.Address, c.AdminPassword, s));
             }
             catch (InvalidOperationException ex)
             {
-                settingsStatus.Text = ex.Message;
+                error = ex.Message;
+            }
+            busy = false;
+            if (IsDisposed || c != selected)
+            {
+                return;
+            }
+            if (error != null)
+            {
+                settingsStatus.Text = "Speichern fehlgeschlagen: " + error;
+                UpdateSaveButton();
+                return;
+            }
+            // Read back what the cube really stored.
+            if (await LoadCubeSettings())
+            {
+                settingsStatus.Text = "Gespeichert um " + DateTime.Now.ToString("HH:mm:ss") + ".";
+                if (loaded.DeviceName != c.Name)
+                {
+                    c.Name = loaded.DeviceName;
+                    RefreshList();
+                    Ctx.Save();
+                }
             }
         }
     }
