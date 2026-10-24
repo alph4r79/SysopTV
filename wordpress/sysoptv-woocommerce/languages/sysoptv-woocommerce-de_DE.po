@@ -1,0 +1,108 @@
+# German translation of SysopTV for WooCommerce.
+# Copyright (C) 2026 Christoph Scheel
+# This file is distributed under the GPL-3.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: SysopTV for WooCommerce 0.1.0\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: sysoptv-woocommerce\n"
+
+msgid "SysopTV for WooCommerce"
+msgstr "SysopTV für WooCommerce"
+
+msgid "Shows orders and revenue of your WooCommerce shop on a SysopTV desk cube. Provides a small, key protected REST endpoint with totals only, no customer data."
+msgstr "Zeigt Bestellungen und Umsatz deines WooCommerce-Shops auf einem SysopTV-Würfel am Schreibtisch. Stellt eine kleine, per Schlüssel geschützte REST-Schnittstelle bereit, nur mit Summen, ohne Kundendaten."
+
+msgid "SysopTV for WooCommerce needs WooCommerce. Please install and activate WooCommerce first."
+msgstr "SysopTV für WooCommerce braucht WooCommerce. Bitte zuerst WooCommerce installieren und aktivieren."
+
+msgid "This endpoint only answers over HTTPS. Use the https:// address of the site."
+msgstr "Diese Schnittstelle antwortet nur über HTTPS. Bitte die https://-Adresse der Website verwenden."
+
+msgid "Too many wrong keys. Access is locked for a while."
+msgstr "Zu viele falsche Schlüssel. Der Zugang ist für eine Weile gesperrt."
+
+msgid "The key is missing or wrong."
+msgstr "Der Schlüssel fehlt oder ist falsch."
+
+msgid "At most one request every 30 seconds."
+msgstr "Höchstens eine Anfrage alle 30 Sekunden."
+
+msgid "SysopTV"
+msgstr "SysopTV"
+
+msgid "You are not allowed to do this."
+msgstr "Das darfst du nicht."
+
+msgid "Access revoked. The SysopTV program can no longer read the shop until you create a new key."
+msgstr "Zugang gesperrt. Das SysopTV-Programm kann den Shop nicht mehr lesen, bis du einen neuen Schlüssel erzeugst."
+
+msgid "You are not allowed to see this page."
+msgstr "Du darfst diese Seite nicht sehen."
+
+msgid "Shows orders and revenue of this shop on a SysopTV desk cube. The SysopTV program on your PC reads the totals from a small endpoint protected by a key."
+msgstr "Zeigt Bestellungen und Umsatz dieses Shops auf einem SysopTV-Würfel am Schreibtisch. Das SysopTV-Programm auf deinem PC liest die Summen über eine kleine, per Schlüssel geschützte Schnittstelle."
+
+msgid "Copy this key into the SysopTV program now. It is shown only this once and cannot be shown again."
+msgstr "Kopiere diesen Schlüssel jetzt ins SysopTV-Programm. Er wird nur dieses eine Mal angezeigt und lässt sich später nicht mehr anzeigen."
+
+msgid "Access key"
+msgstr "Zugangsschlüssel"
+
+msgid "A key is set. Only a hash of it is stored on this site."
+msgstr "Ein Schlüssel ist gesetzt. Auf dieser Website ist nur ein Hash davon gespeichert."
+
+msgid "Create new key"
+msgstr "Neuen Schlüssel erzeugen"
+
+msgid "The old key stops working at once. Continue?"
+msgstr "Der alte Schlüssel wird sofort ungültig. Fortfahren?"
+
+msgid "Revoke access"
+msgstr "Zugang sperren"
+
+msgid "The SysopTV program can no longer read the shop. Continue?"
+msgstr "Das SysopTV-Programm kann den Shop dann nicht mehr lesen. Fortfahren?"
+
+msgid "No key yet. The endpoint answers no request without a key."
+msgstr "Noch kein Schlüssel. Ohne Schlüssel beantwortet die Schnittstelle keine Anfrage."
+
+msgid "Create key"
+msgstr "Schlüssel erzeugen"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Address of the endpoint"
+msgstr "Adresse der Schnittstelle"
+
+msgid "In the SysopTV program the address of the website is enough, for example https://shop.example.com."
+msgstr "Im SysopTV-Programm reicht die Adresse der Website, zum Beispiel https://shop.example.com."
+
+msgid "Last successful request"
+msgstr "Letzter erfolgreicher Abruf"
+
+msgid "never"
+msgstr "noch nie"
+
+msgid "HTTPS"
+msgstr "HTTPS"
+
+msgid "active"
+msgstr "aktiv"
+
+msgid "not active: the endpoint only answers over HTTPS"
+msgstr "nicht aktiv: die Schnittstelle antwortet nur über HTTPS"
+
+msgid "Which data leaves the shop"
+msgstr "Welche Daten den Shop verlassen"
+
+msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
+msgstr "Shopname, Währung, Zeitzone, Anzahl der Bestellungen und Umsatz für heute, gestern, diese Woche, diesen Monat, die letzten 7 Tage und jeden der letzten 14 Tage, die Anzahl der zu versendenden Bestellungen, Zeit und Betrag der letzten Bestellung sowie für die heutigen Bestellungen (höchstens 20) Bestellnummer, Uhrzeit, Betrag und ob sie versendet ist."
+
+msgid "No customer data: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items."
+msgstr "Keine Kundendaten: keine Namen, Adressen, E-Mail-Adressen, Telefonnummern, IP-Adressen, Notizen oder Artikel."

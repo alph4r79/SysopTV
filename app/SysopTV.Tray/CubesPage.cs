@@ -42,7 +42,8 @@ namespace SysopTV.Tray
         private readonly TextBox adminPassword = new TextBox { Width = 240, UseSystemPasswordChar = true };
         private readonly Button testButton = new Button { Text = "Verbindung testen", AutoSize = true };
         private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(190, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(6, 3, 0, 0) };
-        private readonly ComboBox shopView = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+        private readonly ComboBox shopSource = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
+        private readonly ComboBox shopView = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
         private readonly ComboBox period = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
         private readonly ComboBox periodCycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
         private readonly ComboBox content = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
@@ -96,13 +97,15 @@ namespace SysopTV.Tray
 
             AddRow(connGrid, "Adresse (IP oder Name)", address);
             AddRow(connGrid, "Funktion", function);
+            shopSource.Items.AddRange(ShopSources.All);
             shopView.Items.AddRange(ShopBig.Views);
             period.Items.AddRange(ShopBig.Periods);
             periodCycle.Items.AddRange(new object[] { "nicht wechseln", "alle 30 Sekunden", "alle 60 Sekunden" });
             content.Items.AddRange(ShopBig.Contents);
             bigStyle.Items.AddRange(ShopBig.Styles);
-            viewRow = shopView;
-            AddRow(connGrid, "Ansicht", viewRow);
+            // Source and view share one row, so the page still fits without scrolling.
+            viewRow = Row(shopSource, Caption("Ansicht"), shopView);
+            AddRow(connGrid, "Quelle", viewRow);
             designRow = Row(design, claudeFlip);
             AddRow(connGrid, "Design", designRow);
             modeRow = Row(showUsed, showLeft);
@@ -181,6 +184,7 @@ namespace SysopTV.Tray
             showUsed.CheckedChanged += (s, e) => Commit();
             cycle.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
             shopView.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
+            shopSource.SelectedIndexChanged += (s, e) => Commit();
             period.SelectedIndexChanged += (s, e) => Commit();
             periodCycle.SelectedIndexChanged += (s, e) => Commit();
             content.SelectedIndexChanged += (s, e) => Commit();
@@ -305,6 +309,7 @@ namespace SysopTV.Tray
             c.CycleSeconds = CubeEntry.CycleChoices[Math.Max(0, cycle.SelectedIndex)];
             if (c.Function == CubeFunction.ShopFrame)
             {
+                c.ShopSource = Picked(shopSource, c.ShopSource);
                 c.ShopView = Picked(shopView, c.ShopView);
                 c.BigPeriod = Picked(period, c.BigPeriod);
                 c.BigContent = Picked(content, c.BigContent);
@@ -335,7 +340,7 @@ namespace SysopTV.Tray
         private static string Snapshot(CubeEntry c)
         {
             return string.Join("|", c.Address, c.Function, c.Design, c.ShowUsed, c.CycleSeconds, c.ApiKeyProtected, c.AdminPasswordProtected,
-                               c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
+                               c.ShopSource, c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
         }
 
         private static string Picked(ComboBox box, string current)
@@ -375,6 +380,7 @@ namespace SysopTV.Tray
             showUsed.Checked = selected.ShowUsed;
             showLeft.Checked = !selected.ShowUsed;
             cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.CycleSeconds));
+            Pick(shopSource, ShopSources.All, selected.ShopSource);
             Pick(shopView, ShopBig.Views, selected.ShopView);
             Pick(period, ShopBig.Periods, selected.BigPeriod);
             Pick(content, ShopBig.Contents, selected.BigContent);

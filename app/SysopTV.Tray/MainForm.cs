@@ -213,6 +213,7 @@ namespace SysopTV.Tray
                 new CubesPage(ctx),
                 new ClaudePage(ctx),
                 new ShopifyPage(ctx),
+                new WooCommercePage(ctx),
                 new ProgramPage(ctx)
             };
         }

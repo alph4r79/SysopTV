@@ -5,6 +5,7 @@
 // numbers, shared by the Claude styles and the shop big display.
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace SysopTV.Tray
@@ -113,6 +114,148 @@ namespace SysopTV.Tray
                 }
                 dot += last - first + 2;
             }
+        }
+
+        // ---- small labels: 3x5 font, the colon two dots high for each point ----
+
+        private static readonly Dictionary<char, string> Tiny3x5 = new Dictionary<char, string>
+        {
+            { '0', "### #.# #.# #.# ###" },
+            { '1', ".#. ##. .#. .#. ###" },
+            { '2', "### ..# ### #.. ###" },
+            { '3', "### ..# ### ..# ###" },
+            { '4', "#.# #.# ### ..# ..#" },
+            { '5', "### #.. ### ..# ###" },
+            { '6', "### #.. ### #.# ###" },
+            { '7', "### ..# ..# .#. .#." },
+            { '8', "### #.# ### #.# ###" },
+            { '9', "### #.# ### ..# ###" },
+            { 'A', ".#. #.# ### #.# #.#" },
+            { 'B', "##. #.# ##. #.# ##." },
+            { 'C', ".## #.. #.. #.. .##" },
+            { 'D', "##. #.# #.# #.# ##." },
+            { 'E', "### #.. ##. #.. ###" },
+            { 'F', "### #.. ##. #.. #.." },
+            { 'G', ".## #.. #.# #.# .##" },
+            { 'H', "#.# #.# ### #.# #.#" },
+            { 'I', "### .#. .#. .#. ###" },
+            { 'J', "..# ..# ..# #.# .#." },
+            { 'K', "#.# #.# ##. #.# #.#" },
+            { 'L', "#.. #.. #.. #.. ###" },
+            { 'M', "#...# ##.## #.#.# #...# #...#" },
+            { 'N', "#..# ##.# #.## #..# #..#" },
+            { 'O', ".#. #.# #.# #.# .#." },
+            { 'P', "##. #.# ##. #.. #.." },
+            { 'Q', ".#. #.# #.# ##. .##" },
+            { 'R', "##. #.# ##. #.# #.#" },
+            { 'S', ".## #.. .#. ..# ##." },
+            { 'T', "### .#. .#. .#. .#." },
+            { 'U', "#.# #.# #.# #.# ###" },
+            { 'V', "#.# #.# #.# #.# .#." },
+            { 'W', "#...# #...# #.#.# ##.## #...#" },
+            { 'X', "#.# #.# .#. #.# #.#" },
+            { 'Y', "#.# #.# .#. .#. .#." },
+            { 'Z', "### ..# .#. #.. ###" },
+            { '%', "#.# ..# .#. #.. #.#" },
+            { ':', "# # . # #" },
+            { '.', ". . . . #" },
+            { ',', ". . . # #" },
+            { '-', "... ... ### ... ..." },
+            { '/', "..# ..# .#. #.. #.." },
+            { ' ', ".. .. .. .. .." },
+        };
+
+        private static string[] TinyGlyph(char ch)
+        {
+            string rows;
+            if (!Tiny3x5.TryGetValue(char.ToUpperInvariant(ch), out rows))
+            {
+                rows = Tiny3x5[' '];
+            }
+            return rows.Split(' ');
+        }
+
+        private static string TinyPlain(string s)
+        {
+            return s.Replace("ß", "SS").ToUpperInvariant();
+        }
+
+        private static char TinyBase(char ch)
+        {
+            int u = "ÄÖÜ".IndexOf(ch);
+            return u >= 0 ? "AOU"[u] : ch;
+        }
+
+        private static int TinyDots(string s)
+        {
+            int n = 0;
+            foreach (char ch in TinyPlain(s))
+            {
+                n += TinyGlyph(TinyBase(ch))[0].Length + 1;
+            }
+            return Math.Max(0, n - 1);
+        }
+
+        internal static int TinyWidth(string s, int pitch)
+        {
+            int n = TinyDots(s);
+            return n <= 0 ? 0 : (n - 1) * pitch + DotSize(pitch);
+        }
+
+        internal static int TinyHeight(int pitch)
+        {
+            return 4 * pitch + DotSize(pitch);
+        }
+
+        // Draws a small label centred at cx, top at y. Umlauts get two dots one row above.
+        internal static void Tiny(Canvas c, string s, int cx, int y, int pitch, ushort colour)
+        {
+            s = TinyPlain(s);
+            int d = DotSize(pitch);
+            int x = Snap(cx - TinyWidth(s, pitch) / 2, pitch);
+            y = Snap(y, pitch);
+            foreach (char ch in s)
+            {
+                char b = TinyBase(ch);
+                string[] rows = TinyGlyph(b);
+                for (int r = 0; r < rows.Length; r++)
+                {
+                    for (int col = 0; col < rows[r].Length; col++)
+                    {
+                        if (rows[r][col] == '#')
+                        {
+                            c.Dot(x + col * pitch, y + r * pitch, d, colour);
+                        }
+                    }
+                }
+                if (b != ch)
+                {
+                    c.Dot(x, y - pitch, d, colour);
+                    c.Dot(x + (rows[0].Length - 1) * pitch, y - pitch, d, colour);
+                }
+                x += (rows[0].Length + 1) * pitch;
+            }
+        }
+
+        // Tops of rows of the given heights, spread evenly over 240 pixels with
+        // the same space at the top, between the rows and at the bottom, each
+        // snapped to its grid.
+        internal static int[] Spread(int[] heights, int[] pitches)
+        {
+            int total = 0;
+            foreach (int h in heights)
+            {
+                total += h;
+            }
+            double gap = (Canvas.Size - total) / (double)(heights.Length + 1);
+            var tops = new int[heights.Length];
+            double y = gap;
+            for (int i = 0; i < heights.Length; i++)
+            {
+                tops[i] = (int)Math.Round(y / pitches[i]) * pitches[i];
+                y += heights[i] + gap;
+            }
+            return tops;
         }
 
         // ---- labels: 5x7 font, 6 dots per character ----

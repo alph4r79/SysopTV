@@ -40,6 +40,36 @@ namespace SysopTV.Tray
         [DataMember(Name = "session", EmitDefaultValue = false)] public StoredLimit Session;
         [DataMember(Name = "week", EmitDefaultValue = false)] public StoredLimit Week;
 
+        // Last valid shop numbers per source with their time, no customer data.
+        [DataMember(Name = "shopify", EmitDefaultValue = false)] public ShopData ShopifyShop;
+        [DataMember(Name = "shopifyOkAt")] public long ShopifyOkAt;
+        [DataMember(Name = "woocommerce", EmitDefaultValue = false)] public ShopData WooShop;
+        [DataMember(Name = "woocommerceOkAt")] public long WooOkAt;
+
+        internal ShopData Shop(string source)
+        {
+            return source == ShopSources.WooCommerce ? WooShop : ShopifyShop;
+        }
+
+        internal long ShopOkAt(string source)
+        {
+            return source == ShopSources.WooCommerce ? WooOkAt : ShopifyOkAt;
+        }
+
+        internal void SetShop(string source, ShopData data, DateTime when)
+        {
+            if (source == ShopSources.WooCommerce)
+            {
+                WooShop = data;
+                WooOkAt = ToUnix(when);
+            }
+            else
+            {
+                ShopifyShop = data;
+                ShopifyOkAt = ToUnix(when);
+            }
+        }
+
         internal static string DefaultPath
         {
             get { return Path.Combine(AppPaths.LogDir, "state.json"); }

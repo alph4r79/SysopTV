@@ -2,22 +2,69 @@
 
 SysopTV is a free firmware for the GeekMagic SmallTV Ultra. It shows your Claude usage limits on your desk: the 5 hour session and the weekly limit, each with its reset time.
 
+<p align="center"><img src="docs/images/design-klassik.jpg" width="320" alt="SysopTV cube on the desk with the design Klassik"></p>
+
+The firmware draws six designs itself. The Windows program can also send pictures, in four more styles for Claude and as orders and revenue of a Shopify or WooCommerce shop. See "Designs" below.
+
+The name comes from the sysop, who in the days of dial-up mailboxes kept an eye on all systems from a single screen.
+
+## Designs
+
+### Claude
+
+The six designs of the firmware (Säulen, Phosphor, DOS, ANSI, Bernstein, Klassik) and the four picture styles of the Windows program (LED-Matrix, Hell, Fallblatt, 4-Ton-Grün), here with the percentages as used ("verbraucht"), plus one example for remaining ("übrig") and one for the warning colour below 20 % left.
+
 <table>
   <tr>
-    <td align="center"><img src="docs/images/design-saeulen.jpg" width="250" alt="Design Säulen"><br>Säulen</td>
-    <td align="center"><img src="docs/images/design-phosphor.jpg" width="250" alt="Design Phosphor"><br>Phosphor</td>
-    <td align="center"><img src="docs/images/design-dos.jpg" width="250" alt="Design DOS"><br>DOS</td>
+    <td align="center"><img src="docs/images/screens/claude-saeulen.png" width="180" alt="Säulen"><br>Säulen</td>
+    <td align="center"><img src="docs/images/screens/claude-phosphor.png" width="180" alt="Phosphor"><br>Phosphor</td>
+    <td align="center"><img src="docs/images/screens/claude-dos.png" width="180" alt="DOS"><br>DOS</td>
+    <td align="center"><img src="docs/images/screens/claude-ansi.png" width="180" alt="ANSI"><br>ANSI</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/design-ansi.jpg" width="250" alt="Design ANSI"><br>ANSI</td>
-    <td align="center"><img src="docs/images/design-bernstein.jpg" width="250" alt="Design Bernstein"><br>Bernstein</td>
-    <td align="center"><img src="docs/images/design-klassik.jpg" width="250" alt="Design Klassik"><br>Klassik</td>
+    <td align="center"><img src="docs/images/screens/claude-bernstein.png" width="180" alt="Bernstein"><br>Bernstein</td>
+    <td align="center"><img src="docs/images/screens/claude-klassik.png" width="180" alt="Klassik"><br>Klassik</td>
+    <td align="center"><img src="docs/images/screens/claude-led.png" width="180" alt="LED-Matrix"><br>LED-Matrix</td>
+    <td align="center"><img src="docs/images/screens/claude-hell.png" width="180" alt="Hell"><br>Hell</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/screens/claude-fallblatt.png" width="180" alt="Fallblatt"><br>Fallblatt</td>
+    <td align="center"><img src="docs/images/screens/claude-gruen.png" width="180" alt="4-Ton-Grün"><br>4-Ton-Grün</td>
+    <td align="center"><img src="docs/images/screens/claude-dos-uebrig.png" width="180" alt="DOS, übrig"><br>DOS, übrig</td>
+    <td align="center"><img src="docs/images/screens/claude-fallblatt-warnung.png" width="180" alt="Fallblatt, Warnfarbe"><br>Fallblatt, Warnfarbe</td>
   </tr>
 </table>
 
-There are six designs: Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik. Klassik follows the layout of the image that an older PC script made for the original firmware: the session big in the middle, the week as a bar of 16 segments below.
+### Shop big view
 
-The name comes from the sysop, who in the days of dial-up mailboxes kept an eye on all systems from a single screen.
+One period with one big number, here today with orders and revenue, in all seven styles.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/screens/shop-gross-bon-heute.png" width="180" alt="Kassenbon"><br>Kassenbon</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-dos-heute.png" width="180" alt="DOS"><br>DOS</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-bernstein-heute.png" width="180" alt="Bernstein"><br>Bernstein</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-led-heute.png" width="180" alt="LED-Matrix"><br>LED-Matrix</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/images/screens/shop-gross-hell-heute.png" width="180" alt="Hell"><br>Hell</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-fallblatt-heute.png" width="180" alt="Fallblatt"><br>Fallblatt</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-gruen-heute.png" width="180" alt="4-Ton-Grün"><br>4-Ton-Grün</td>
+  </tr>
+</table>
+
+### Shop details
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/images/screens/shop-tabelle.png" width="180" alt="Tabelle"><br>Tabelle</td>
+    <td align="center"><img src="docs/images/screens/shop-bestellliste.png" width="180" alt="Bestellliste"><br>Bestellliste</td>
+    <td align="center"><img src="docs/images/screens/shop-kassenbon.png" width="180" alt="Kassenbon Übersicht"><br>Kassenbon Übersicht</td>
+    <td align="center"><img src="docs/images/screens/shop-wochendiagramm.png" width="180" alt="Wochendiagramm"><br>Wochendiagramm</td>
+  </tr>
+</table>
+
+The pictures come straight from the software (`SysopTV.exe --docs`, sample data). On the real panel the colours look somewhat warmer.
 
 ## Please read first
 
@@ -27,7 +74,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Firmware version 0.4.3, Windows program version 0.5.2.
+Firmware version 0.4.3, Windows program version 0.6.0, WordPress plugin "SysopTV for WooCommerce" version 0.1.0.
 
 Tested on real hardware:
 
@@ -53,7 +100,8 @@ Not yet tested on real hardware, so there is no promise that these work:
 - "nicht aktiv" for a session without reset time (new in 0.4.1)
 - the overview page in picture mode and the fall back to the own design with fresh numbers (new in 0.4.2)
 - the valid picture: no parts on a screen the cube drew itself (new in 0.4.3)
-- the Windows program 0.5.2
+- the Windows program 0.6.0
+- the WordPress plugin "SysopTV for WooCommerce" 0.1.0
 
 ## How it works
 
@@ -94,13 +142,13 @@ It can feed several cubes. Each cube in the list gets one function:
 
 - **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
 - **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode). With firmware 0.4.2 or newer the program also sends the numbers, so the cube can show its own design with real values when the pictures stop.
-- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop as a picture, as a big display of one number or in one of four detail views. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
+- **Shop als Bild** (shop as picture): orders and revenue of a Shopify or WooCommerce shop as a picture, as a big display of one number or in one of four detail views. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
 
 The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out. If nothing changes for 60 seconds, the program sends a sign of life (a tiny part, or the full picture for firmware before 0.4.3 or when the cube does not report a valid picture), so the cube never falls back to its own design while the program runs. Since firmware 0.4.3 the cube refuses parts while its screen is not a complete picture from the PC (answer 409), and the program then sends the full picture at once.
 
 The program remembers the time of the last query, a pause after error 429 and the last valid values in `%LOCALAPPDATA%\SysopTV\state.json` (never the login key). After a restart it waits until the interval has passed and the pause is over, and shows the stored values until then.
 
-Version 0.5.2 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+Version 0.6.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
 
 ### Designs as pictures
 
@@ -165,6 +213,7 @@ At the top the window shows the state and the time of the last sending. On the l
 
   Fields that do not count for the chosen function are hidden.
 - **Claude**: the interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429 with the time left, and "Jetzt abfragen" (query now, at most once in 120 seconds).
+- **WooCommerce**: the same layout as Shopify, with the address of the website and the key of the plugin "SysopTV for WooCommerce" (see "WooCommerce"). "Shop testen" shows the shop name, today's orders and the plugin version.
 - **Shopify**: a short guide with a link to Shopify, shop address, the name for the display and the access (see "Shopify"), "Shop testen" (test the shop: shows the shop name, today's orders and the API version, or what went wrong) and the last query.
 - **Programm** (program): "Mit Windows starten" (start with Windows), the log folder, the version and the link to this repository.
 
@@ -172,11 +221,21 @@ Settings of the program are saved as soon as you leave a field, there is no save
 
 When no session is running, the status line, the tooltip, the overview and the page Claude say "Session nicht aktiv".
 
-The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
+The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords, the Shopify access and the WooCommerce key only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify or your WooCommerce website (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
 
 If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC. Every 10 minutes the program checks again whether a process with `sysoptv-sender.ps1` in its command line runs. If so, the status line says "Altes PowerShell-Skript sendet parallel" in the warning colour and a notification appears once.
 
 For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes every picture design with sample data as PNG files, without network. `--once` also keeps to the 120 seconds after the last query and updates `state.json`.
+
+### WooCommerce
+
+For a WooCommerce shop the program needs the WordPress plugin "SysopTV for WooCommerce" (`wordpress/sysoptv-woocommerce/`, GPL-3.0-or-later). It adds one endpoint, `GET /wp-json/sysoptv/v1/stats`, protected by a key that you create in WordPress under WooCommerce, SysopTV. Only a hash of the key is stored on the site, the program keeps it encrypted.
+
+The plugin returns the same numbers the program reads from Shopify, so every shop view works with both sources: orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the orders still to ship, the last order and today's orders (at most 20, with number, time, amount and shipped or not). **No customer data**: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items.
+
+Counted are orders with the status processing, completed and on-hold, processing also as still to ship, completed as shipped. Revenue is the order total (gross, including shipping and taxes, after discounts, refunds not deducted), the same definition as for Shopify. The endpoint only answers over HTTPS, at most once every 30 seconds, locks an address after 10 wrong keys and caches its result for 60 seconds. It reads orders only through the WooCommerce API and works with the high performance order storage (HPOS).
+
+Per cube with "Shop als Bild" you choose the source, Shopify or WooCommerce. Installation, the fields of the answer and troubleshooting are in [docs/woocommerce-setup.md](docs/woocommerce-setup.md).
 
 ### Shopify
 
@@ -373,6 +432,14 @@ bash build-app.sh
 ```
 
 The script builds the program and puts `sysoptv-app-<version>-portable.zip` and, if Inno Setup is installed, `sysoptv-app-<version>-setup.exe` into `dist/`. The program version is set in `app/SysopTV.Tray/SysopTV.Tray.csproj`, it is separate from the firmware version. The program uses only what .NET Framework 4.8 brings along, no extra packages.
+
+### WordPress plugin
+
+```sh
+python wordpress/tools/build-plugin.py
+```
+
+The script writes the translation template, compiles the German translation (`.mo`) without extra tools, runs `php -l` on every file if PHP is installed, and puts `dist/sysoptv-woocommerce-<version>.zip` together. That ZIP contains the folder `sysoptv-woocommerce/` and can be uploaded in WordPress under Plugins, Add New, Upload Plugin.
 
 ### Hardware
 

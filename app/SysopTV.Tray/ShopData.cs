@@ -9,42 +9,67 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.Serialization;
 
 namespace SysopTV.Tray
 {
+    // The classes are stored in state.json, so the last valid numbers survive
+    // a restart of the program. They hold no customer data.
+    [DataContract]
     internal sealed class ShopPeriod
     {
-        internal DateTime Date;  // only for the days of the last 14 days
-        internal int Orders;
-        internal decimal Revenue;
+        [DataMember(Name = "date", EmitDefaultValue = false)] internal DateTime Date;  // only for the days of the last 14 days
+        [DataMember(Name = "orders")] internal int Orders;
+        [DataMember(Name = "revenue")] internal decimal Revenue;
     }
 
+    [DataContract]
     internal sealed class ShopOrder
     {
-        internal string Number;  // like "#1043"
-        internal DateTime Time;  // shop time
-        internal decimal Amount;
-        internal bool Shipped;
+        [DataMember(Name = "number")] internal string Number;  // like "#1043"
+        [DataMember(Name = "time")] internal DateTime Time;    // shop time
+        [DataMember(Name = "amount")] internal decimal Amount;
+        [DataMember(Name = "shipped")] internal bool Shipped;
     }
 
+    // The same model for Shopify and WooCommerce, so every shop view works with both.
+    [DataContract]
     internal sealed class ShopData
     {
         internal const int MaxTodayOrders = 20;
 
-        internal ShopPeriod Today = new ShopPeriod();
-        internal ShopPeriod Yesterday = new ShopPeriod();
-        internal ShopPeriod Week = new ShopPeriod();   // last 7 days including today
-        internal ShopPeriod CalendarWeek = new ShopPeriod();  // since Monday 0:00, shop time
-        internal ShopPeriod Month = new ShopPeriod();  // current month
-        internal List<ShopPeriod> Days = new List<ShopPeriod>();       // last 14 days, oldest first, today last
-        internal List<ShopOrder> TodayOrders = new List<ShopOrder>();  // newest first, at most 20
-        internal int Unshipped;
-        internal DateTime? LastOrderTime;              // shop time
-        internal decimal LastOrderAmount;
-        internal string ShopName = "";                 // name of the shop at Shopify
-        internal DateTime ShopNow;                     // shop time when the data was read
-        internal DateTime FetchedAt;                   // PC time when the data was read
-        internal string Error;                         // null if fine
+        [DataMember(Name = "today")] internal ShopPeriod Today = new ShopPeriod();
+        [DataMember(Name = "yesterday")] internal ShopPeriod Yesterday = new ShopPeriod();
+        [DataMember(Name = "last7Days")] internal ShopPeriod Week = new ShopPeriod();          // last 7 days including today
+        [DataMember(Name = "week")] internal ShopPeriod CalendarWeek = new ShopPeriod();      // since Monday 0:00, shop time
+        [DataMember(Name = "month")] internal ShopPeriod Month = new ShopPeriod();            // current month
+        [DataMember(Name = "days")] internal List<ShopPeriod> Days = new List<ShopPeriod>();         // last 14 days, oldest first, today last
+        [DataMember(Name = "todayOrders")] internal List<ShopOrder> TodayOrders = new List<ShopOrder>();  // newest first, at most 20
+        [DataMember(Name = "unshipped")] internal int Unshipped;
+        [DataMember(Name = "lastOrderTime")] internal DateTime? LastOrderTime;   // shop time
+        [DataMember(Name = "lastOrderAmount")] internal decimal LastOrderAmount;
+        [DataMember(Name = "shop")] internal string ShopName = "";              // name of the shop at the source
+        [DataMember(Name = "currency")] internal string Currency = "";          // like EUR, only WooCommerce sends it
+        [DataMember(Name = "shopNow", EmitDefaultValue = false)] internal DateTime ShopNow;               // shop time when the data was read
+        [DataMember(Name = "fetchedAt", EmitDefaultValue = false)] internal DateTime FetchedAt;           // PC time when the data was read
+        internal string Plugin = "";             // version of the WooCommerce plugin
+        internal string Error;                   // null if fine
+        internal int RetryAfterSeconds;          // the source asked to wait, 0 if not
+
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Today = new ShopPeriod();
+            Yesterday = new ShopPeriod();
+            Week = new ShopPeriod();
+            CalendarWeek = new ShopPeriod();
+            Month = new ShopPeriod();
+            Days = new List<ShopPeriod>();
+            TodayOrders = new List<ShopOrder>();
+            ShopName = "";
+            Currency = "";
+            Plugin = "";
+        }
 
         // Revenue of the 7 days before the last 7 days, null without data.
         internal decimal? PreviousWeekRevenue
@@ -54,7 +79,12 @@ namespace SysopTV.Tray
 
         internal static ShopData Sample(int todayOrders)
         {
-            DateTime now = DateTime.Now;
+            return Sample(todayOrders, DateTime.Now);
+        }
+
+        // Sample numbers around a fixed moment, for the pictures of the documentation.
+        internal static ShopData Sample(int todayOrders, DateTime now)
+        {
             DateTime today = now.Date;
             var d = new ShopData { FetchedAt = now.AddSeconds(-40), ShopNow = now, Unshipped = 3 };
             decimal[] revenue = { 250m, 230m, 215m, 260m, 240m, 245m, 235m, 211.40m, 318.90m, 165.00m, 401.30m, 182.50m, 412.80m, 184.50m };

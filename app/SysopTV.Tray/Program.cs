@@ -32,6 +32,11 @@ namespace SysopTV.Tray
             {
                 return OnceMode.Run(args);
             }
+            string docs = ArgValue(args, "--docs");
+            if (docs != null)
+            {
+                return PreviewMode.Docs(docs);
+            }
             string preview = ArgValue(args, "--preview");
             if (preview != null)
             {

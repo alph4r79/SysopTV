@@ -97,6 +97,9 @@ namespace SysopTV.Tray
         // Flip animation of the style Fallblatt, for Claude and the shop.
         [DataMember(Name = "animate")] public bool Animate = true;
 
+        // Shop as picture: where the numbers come from, "shopify" or "woocommerce".
+        [DataMember(Name = "shopSource")] public string ShopSource = ShopSources.Shopify;
+
         internal static readonly int[] CycleChoices = { 0, 30, 60 };
 
         internal string ApiKey
@@ -128,6 +131,7 @@ namespace SysopTV.Tray
             BigStyle = ShopBig.DefaultStyle;
             PeriodCycleSeconds = 0;
             Animate = true;
+            ShopSource = ShopSources.Shopify;
         }
 
         // What the picture shows now: the style of the big display, or the design.
@@ -228,6 +232,10 @@ namespace SysopTV.Tray
             {
                 BigStyle = ShopBig.DefaultStyle;
             }
+            if (!ShopBig.Known(ShopSources.All, ShopSource))
+            {
+                ShopSource = ShopSources.Shopify;
+            }
             if (Array.IndexOf(CycleChoices, PeriodCycleSeconds) < 0)
             {
                 PeriodCycleSeconds = 0;
@@ -249,6 +257,51 @@ namespace SysopTV.Tray
         internal CubeEntry Copy()
         {
             return (CubeEntry)MemberwiseClone();
+        }
+    }
+
+    // The shop sources for "Shop als Bild".
+    internal static class ShopSources
+    {
+        internal const string Shopify = "shopify";
+        internal const string WooCommerce = "woocommerce";
+        internal static readonly DesignInfo[] All =
+        {
+            new DesignInfo(Shopify, "Shopify"),
+            new DesignInfo(WooCommerce, "WooCommerce")
+        };
+    }
+
+    // Access to a WooCommerce shop with the plugin "SysopTV for WooCommerce".
+    [DataContract]
+    internal sealed class WooConfig
+    {
+        [DataMember(Name = "url")] public string Url = "";
+        [DataMember(Name = "displayName")] public string DisplayName = "";
+        [DataMember(Name = "keyProtected")] public string KeyProtected = "";
+
+        internal string Key
+        {
+            get { return Secret.Unprotect(KeyProtected); }
+            set { KeyProtected = Secret.Protect(value); }
+        }
+
+        internal bool Configured
+        {
+            get { return !string.IsNullOrWhiteSpace(Url) && !string.IsNullOrEmpty(KeyProtected); }
+        }
+
+        [OnDeserialized]
+        private void OnDeserialized(StreamingContext context)
+        {
+            Url = Url ?? "";
+            DisplayName = DisplayName ?? "";
+            KeyProtected = KeyProtected ?? "";
+        }
+
+        internal WooConfig Copy()
+        {
+            return (WooConfig)MemberwiseClone();
         }
     }
 
@@ -307,6 +360,7 @@ namespace SysopTV.Tray
         [DataMember(Name = "cubes")] public List<CubeEntry> Cubes;
         [DataMember(Name = "intervalSeconds")] public int IntervalSeconds;
         [DataMember(Name = "shop")] public ShopConfig Shop;
+        [DataMember(Name = "woocommerce")] public WooConfig Woo;
 
         // Only read, from version 0.1.0.
         [DataMember(Name = "deviceAddress", EmitDefaultValue = false)] public string LegacyAddress;
@@ -328,8 +382,19 @@ namespace SysopTV.Tray
             Cubes = new List<CubeEntry>();
             IntervalSeconds = MinInterval;
             Shop = new ShopConfig();
+            Woo = new WooConfig();
             LegacyAddress = null;
             LegacyApiKey = null;
+        }
+
+        internal bool SourceConfigured(string source)
+        {
+            return source == ShopSources.WooCommerce ? Woo.Configured : Shop.Configured;
+        }
+
+        internal string SourceName(string source)
+        {
+            return source == ShopSources.WooCommerce ? Woo.DisplayName : Shop.DisplayName;
         }
 
         internal int Interval
@@ -339,7 +404,7 @@ namespace SysopTV.Tray
 
         internal AppConfig Clone()
         {
-            var c = new AppConfig { IntervalSeconds = IntervalSeconds, Shop = Shop.Copy() };
+            var c = new AppConfig { IntervalSeconds = IntervalSeconds, Shop = Shop.Copy(), Woo = Woo.Copy() };
             foreach (CubeEntry e in Cubes)
             {
                 c.Cubes.Add(e.Copy());
@@ -381,6 +446,10 @@ namespace SysopTV.Tray
             if (cfg.Shop == null)
             {
                 cfg.Shop = new ShopConfig();
+            }
+            if (cfg.Woo == null)
+            {
+                cfg.Woo = new WooConfig();
             }
             if (cfg.Cubes.Count == 0 && !string.IsNullOrWhiteSpace(cfg.LegacyAddress))
             {

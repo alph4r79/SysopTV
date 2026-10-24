@@ -1,0 +1,137 @@
+# Copyright (C) 2026 Christoph Scheel
+# This file is distributed under the GPL-3.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: SysopTV for WooCommerce 0.1.0\\n"
+"MIME-Version: 1.0\\n"
+"Content-Type: text/plain; charset=UTF-8\\n"
+"Content-Transfer-Encoding: 8bit\\n"
+"X-Domain: sysoptv-woocommerce\\n"
+
+#: sysoptv-woocommerce.php
+msgid "SysopTV for WooCommerce"
+msgstr ""
+
+#: sysoptv-woocommerce.php
+msgid "Shows orders and revenue of your WooCommerce shop on a SysopTV desk cube. Provides a small, key protected REST endpoint with totals only, no customer data."
+msgstr ""
+
+#: sysoptv-woocommerce.php
+msgid "SysopTV for WooCommerce needs WooCommerce. Please install and activate WooCommerce first."
+msgstr ""
+
+#: includes/class-sysoptv-wc-api.php
+msgid "This endpoint only answers over HTTPS. Use the https:// address of the site."
+msgstr ""
+
+#: includes/class-sysoptv-wc-api.php
+msgid "Too many wrong keys. Access is locked for a while."
+msgstr ""
+
+#: includes/class-sysoptv-wc-api.php
+msgid "The key is missing or wrong."
+msgstr ""
+
+#: includes/class-sysoptv-wc-api.php
+msgid "At most one request every 30 seconds."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "SysopTV"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "You are not allowed to do this."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Access revoked. The SysopTV program can no longer read the shop until you create a new key."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "You are not allowed to see this page."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Shows orders and revenue of this shop on a SysopTV desk cube. The SysopTV program on your PC reads the totals from a small endpoint protected by a key."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Copy this key into the SysopTV program now. It is shown only this once and cannot be shown again."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Access key"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "A key is set. Only a hash of it is stored on this site."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Create new key"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "The old key stops working at once. Continue?"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Revoke access"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "The SysopTV program can no longer read the shop. Continue?"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "No key yet. The endpoint answers no request without a key."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Create key"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Status"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Address of the endpoint"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "In the SysopTV program the address of the website is enough, for example https://shop.example.com."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Last successful request"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "never"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "HTTPS"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "active"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "not active: the endpoint only answers over HTTPS"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Which data leaves the shop"
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
+msgstr ""
+
+#: includes/class-sysoptv-wc-settings.php
+msgid "No customer data: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items."
+msgstr ""

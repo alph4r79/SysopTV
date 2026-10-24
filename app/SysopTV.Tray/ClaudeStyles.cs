@@ -49,23 +49,28 @@ namespace SysopTV.Tray
             return s.Bottom.ToUpperInvariant();
         }
 
+        // Heading and reset in the small 3x5 font, the week in the 5x7 font, the
+        // session big; all rows spread evenly from top to bottom.
         private static Canvas LedMatrix(ViewModel v)
         {
             var c = new Canvas();
+            int tiny = Led.TinyHeight(LedSmall), small = Led.SmallHeight(LedSmall);
             if (v.Screen == ViewScreen.Login)
             {
-                Led.Small(c, "ANMELDUNG", 120, 66, LedSmall, Led.WarnOn);
-                Led.Small(c, "ABGELAUFEN", 120, 99, LedSmall, Led.WarnOn);
-                Led.Small(c, v.Clock, 120, 165, LedSmall, Led.Dim);
+                int[] t = Led.Spread(new[] { small, small, tiny }, new[] { LedSmall, LedSmall, LedSmall });
+                Led.Small(c, "ANMELDUNG", 120, t[0], LedSmall, Led.WarnOn);
+                Led.Small(c, "ABGELAUFEN", 120, t[1], LedSmall, Led.WarnOn);
+                Led.Tiny(c, v.Clock, 120, t[2], LedSmall, Led.Dim);
                 return c;
             }
             ViewColumn s = v.Session, w = v.Week;
             // Old values: the stamp takes the place of the heading.
-            string top = v.Stamp != null ? v.Stamp.ToUpperInvariant() : (v.ShowUsed ? "SESSION" : "ÜBRIG");
-            Led.Small(c, top, 120, 12, LedSmall, v.Stamp != null ? Led.WarnDim : Led.Dim);
-            Led.Big(c, Pct(s), 120, 42, LedBig, s.Warn ? Led.WarnOn : Led.On);
-            Led.Small(c, "WOCHE " + Pct(w), 120, 123, LedSmall, w.Warn ? Led.WarnDim : Led.Dim);
-            Led.Small(c, LedReset(s), 120, 165, LedSmall, Led.Dim);
+            string top = v.Stamp != null ? v.Stamp : (v.ShowUsed ? "SESSION" : "ÜBRIG");
+            int[] tops = Led.Spread(new[] { tiny, Led.BigHeight(Pct(s), LedBig), small, tiny }, new[] { LedSmall, LedBig, LedSmall, LedSmall });
+            Led.Tiny(c, top, 120, tops[0], LedSmall, v.Stamp != null ? Led.WarnDim : Led.Dim);
+            Led.Big(c, Pct(s), 120, tops[1], LedBig, s.Warn ? Led.WarnOn : Led.On);
+            Led.Small(c, "WOCHE " + Pct(w), 120, tops[2], LedSmall, w.Warn ? Led.WarnDim : Led.Dim);
+            Led.Tiny(c, LedReset(s), 120, tops[3], LedSmall, Led.Dim);
             return c;
         }
 

@@ -75,6 +75,28 @@ namespace SysopTV.Tray
         private readonly ClaudeClient claude = new ClaudeClient();
         private readonly FailurePolicy policy = new FailurePolicy();
         private readonly ShopifyClient shopify = new ShopifyClient();
+        private readonly WooClient woo = new WooClient();
+
+        // One shop source: its last valid numbers, when it was asked and how
+        // long it asked to wait (Retry-After).
+        private sealed class ShopFeed
+        {
+            internal ShopData Data;
+            internal DateTime? OkTime;
+            internal DateTime LastQuery = DateTime.MinValue;
+            internal DateTime BlockedUntil = DateTime.MinValue;
+            internal string LastError;
+            internal int Busy;
+        }
+
+        private readonly Dictionary<string, ShopFeed> feeds = new Dictionary<string, ShopFeed>
+        {
+            { ShopSources.Shopify, new ShopFeed() },
+            { ShopSources.WooCommerce, new ShopFeed() }
+        };
+
+        // The query at a shop source. The offline tests put a fake here.
+        internal Func<string, AppConfig, ShopData> FetchShopFrom;
         private readonly Timer roundTimer;
         private readonly Timer frameTimer;
         private readonly Dictionary<string, CubeState> states = new Dictionary<string, CubeState>();
@@ -82,16 +104,13 @@ namespace SysopTV.Tray
         private readonly string statePath;
         private readonly AppState state;
         private AppConfig config;
-        private int roundBusy, frameBusy, shopBusy;
+        private int roundBusy, frameBusy;
         private bool started;
         private DateTime lastQuery = DateTime.MinValue;
         private DateTime nextRound = DateTime.MinValue;
-        private DateTime lastShop = DateTime.MinValue;
-        private DateTime? shopOkTime;
         private UsageData lastSent;
         private UsageData lastOk;
         private DateTime? lastOkTime;
-        private ShopData shopData;
         private string lastSummary = "";
         private readonly Dictionary<string, string> lastErrors = new Dictionary<string, string>();
 
@@ -125,6 +144,13 @@ namespace SysopTV.Tray
                 policy.Seed(lastOk, lastOkTime.Value);
             }
             nextRound = lastQuery == DateTime.MinValue ? DateTime.Now : lastQuery.AddSeconds(config.Interval);
+            FetchShopFrom = (source, cfg) => source == ShopSources.WooCommerce ? woo.Fetch(cfg.Woo) : shopify.Fetch(cfg.Shop);
+            foreach (KeyValuePair<string, ShopFeed> f in feeds)
+            {
+                // Pictures can start with the numbers of the last run, they get "Stand HH:MM".
+                f.Value.Data = state.Shop(f.Key);
+                f.Value.OkTime = f.Value.Data != null ? AppState.ToLocal(state.ShopOkAt(f.Key)) : null;
+            }
         }
 
         // Read only by the window.
@@ -162,14 +188,15 @@ namespace SysopTV.Tray
             get { return lastOkTime; }
         }
 
-        internal ShopData Shop
+        internal ShopData ShopOf(string source)
         {
-            get { return shopData; }
+            return feeds[source].Data;
         }
 
-        internal DateTime? LastShopQuery
+        internal DateTime? LastShopQueryOf(string source)
         {
-            get { return lastShop == DateTime.MinValue ? (DateTime?)null : lastShop; }
+            DateTime t = feeds[source].LastQuery;
+            return t == DateTime.MinValue ? (DateTime?)null : t;
         }
 
         internal void Start()
@@ -197,6 +224,7 @@ namespace SysopTV.Tray
             bool intervalChanged = newConfig.Interval != config.Interval;
             bool shopChanged = newConfig.Shop.Domain != config.Shop.Domain || newConfig.Shop.AccessTokenProtected != config.Shop.AccessTokenProtected ||
                                newConfig.Shop.ClientId != config.Shop.ClientId || newConfig.Shop.ClientSecretProtected != config.Shop.ClientSecretProtected;
+            bool wooChanged = newConfig.Woo.Url != config.Woo.Url || newConfig.Woo.KeyProtected != config.Woo.KeyProtected;
             lock (gate)
             {
                 config = newConfig;
@@ -215,7 +243,13 @@ namespace SysopTV.Tray
             }
             if (shopChanged)
             {
-                lastShop = DateTime.MinValue;
+                feeds[ShopSources.Shopify].LastQuery = DateTime.MinValue;
+                feeds[ShopSources.Shopify].BlockedUntil = DateTime.MinValue;
+            }
+            if (wooChanged)
+            {
+                feeds[ShopSources.WooCommerce].LastQuery = DateTime.MinValue;
+                feeds[ShopSources.WooCommerce].BlockedUntil = DateTime.MinValue;
             }
         }
 
@@ -251,9 +285,8 @@ namespace SysopTV.Tray
             {
                 RunRound(false);
             }
-            else if (AnyCube(CubeFunction.ShopFrame) && config.Shop.Configured && DateTime.Now - lastShop >= ShopInterval)
+            else if (FetchShops(config))
             {
-                FetchShop(config);
                 UpdateStatus();
             }
         }
@@ -321,10 +354,7 @@ namespace SysopTV.Tray
                         Remember(c, Cube.SendUsage(c.Address, json, c.ApiKey));
                     }
                 }
-                if (AnyCube(CubeFunction.ShopFrame) && cfg.Shop.Configured && DateTime.Now - lastShop >= ShopInterval)
-                {
-                    FetchShop(cfg);
-                }
+                FetchShops(cfg);
                 UpdateStatus();
             }
             catch (Exception ex)
@@ -337,31 +367,67 @@ namespace SysopTV.Tray
             }
         }
 
-        private void FetchShop(AppConfig cfg)
+        // Every source a cube shows is asked every 5 minutes, not while it asked
+        // to wait. Returns true if a source was asked.
+        internal bool FetchShops(AppConfig cfg)
         {
-            if (Interlocked.Exchange(ref shopBusy, 1) == 1)
+            bool asked = false;
+            DateTime now = DateTime.Now;
+            foreach (DesignInfo source in ShopSources.All)
+            {
+                ShopFeed feed = feeds[source.Id];
+                bool shown = cfg.Cubes.Any(c => c.Function == CubeFunction.ShopFrame && c.ShopSource == source.Id);
+                if (shown && cfg.SourceConfigured(source.Id) && now - feed.LastQuery >= ShopInterval && now >= feed.BlockedUntil)
+                {
+                    FetchShop(source.Id, cfg, now);
+                    asked = true;
+                }
+            }
+            return asked;
+        }
+
+        private void FetchShop(string source, AppConfig cfg, DateTime now)
+        {
+            ShopFeed feed = feeds[source];
+            if (Interlocked.Exchange(ref feed.Busy, 1) == 1)
             {
                 return;
             }
             try
             {
-                lastShop = DateTime.Now;
-                ShopData d = shopify.Fetch(cfg.Shop);
+                feed.LastQuery = now;
+                ShopData d = FetchShopFrom(source, cfg);
+                string label = ShopBig.Label(ShopSources.All, source);
                 if (d.Error != null)
                 {
-                    Log.Write("Shopify: " + d.Error);
-                    if (shopData != null)
+                    if (d.Error != feed.LastError)
                     {
-                        shopData.Error = d.Error;  // keep the last numbers, they get "Stand HH:MM" when old
+                        Log.Write(label + ": " + d.Error);
+                    }
+                    feed.LastError = d.Error;
+                    if (d.RetryAfterSeconds > 0)
+                    {
+                        feed.BlockedUntil = now.AddSeconds(d.RetryAfterSeconds);
+                    }
+                    if (feed.Data != null)
+                    {
+                        feed.Data.Error = d.Error;  // keep the last numbers, they get "Stand HH:MM" when old
                     }
                     return;
                 }
-                shopData = d;
-                shopOkTime = DateTime.Now;
+                if (feed.LastError != null)
+                {
+                    Log.Write(label + ": wieder erreichbar");
+                }
+                feed.LastError = null;
+                feed.Data = d;
+                feed.OkTime = now;
+                state.SetShop(source, d, now);
+                state.Save(statePath);
             }
             finally
             {
-                Interlocked.Exchange(ref shopBusy, 0);
+                Interlocked.Exchange(ref feed.Busy, 0);
             }
         }
 
@@ -627,31 +693,33 @@ namespace SysopTV.Tray
                 ViewModel v = UsageView.Build(lastOk, login, stamp, c.ShowUsed, new DateTimeOffset(now));
                 return ClaudeDesigns.Render(design, v);
             }
-            if (c.ShopBigView && shopData != null)
+            if (c.Function != CubeFunction.ShopFrame)
+            {
+                return null;
+            }
+            // The same views for Shopify and WooCommerce, only the source differs.
+            ShopFeed feed = feeds[c.ShopSource];
+            if (feed.Data == null)
+            {
+                return null;
+            }
+            string name = config.SourceName(c.ShopSource);
+            string shopStamp = Stamp(feed.OkTime, ShopInterval + ShopInterval + TimeSpan.FromMinutes(1), now);
+            if (c.ShopBigView)
             {
                 var big = new ShopBigView
                 {
-                    Data = shopData,
-                    ShopName = config.Shop.DisplayName,
+                    Data = feed.Data,
+                    ShopName = name,
                     Now = now,
-                    Stamp = Stamp(shopOkTime, ShopInterval + ShopInterval + TimeSpan.FromMinutes(1), now),
+                    Stamp = shopStamp,
                     Period = c.PeriodAt(now),
                     Content = c.BigContent
                 };
                 return ShopBig.Render(design, big);
             }
-            if (c.Function == CubeFunction.ShopFrame && shopData != null)
-            {
-                var v = new ShopView
-                {
-                    Data = shopData,
-                    ShopName = config.Shop.DisplayName,
-                    Now = now,
-                    Stamp = Stamp(shopOkTime, ShopInterval + ShopInterval + TimeSpan.FromMinutes(1), now)
-                };
-                return ShopDesigns.Render(design, v);
-            }
-            return null;
+            var details = new ShopView { Data = feed.Data, ShopName = name, Now = now, Stamp = shopStamp };
+            return ShopDesigns.Render(design, details);
         }
 
         // Lines for the overview of the window.
@@ -664,7 +732,8 @@ namespace SysopTV.Tray
                 {
                     CubeState st;
                     states.TryGetValue(c.Address, out st);
-                    var row = new CubeRow { Title = c.Title, Function = CubeFunction.Label(c.Function) };
+                    string function = CubeFunction.Label(c.Function) + (c.Function == CubeFunction.ShopFrame ? " (" + ShopBig.Label(ShopSources.All, c.ShopSource) + ")" : "");
+                    var row = new CubeRow { Title = c.Title, Function = function };
                     if (c.Function == CubeFunction.Usage)
                     {
                         row.Design = "vom Würfel";
@@ -762,13 +831,14 @@ namespace SysopTV.Tray
                 s.Line = values + ", gesendet " + time;
                 s.Tooltip = "SysopTV: " + values;
             }
-            else if (shopData != null)
+            else if (feeds.Values.Any(f => f.Data != null))
             {
-                s.Kind = shopData.Error != null ? StatusKind.Error : StatusKind.Ok;
-                s.Category = shopData.Error != null ? "error" : "ok";
-                s.Line = "Shop: heute " + ShopFormat.Orders(shopData.Today.Orders) + ", " + ShopFormat.Money(shopData.Today.Revenue) + " (" + time + ")";
-                s.Tooltip = "SysopTV: Shop heute " + ShopFormat.Orders(shopData.Today.Orders);
-                s.Detail = shopData.Error ?? "";
+                ShopData shop = feeds.Values.First(f => f.Data != null).Data;
+                s.Kind = shop.Error != null ? StatusKind.Error : StatusKind.Ok;
+                s.Category = shop.Error != null ? "error" : "ok";
+                s.Line = "Shop: heute " + ShopFormat.Orders(shop.Today.Orders) + ", " + ShopFormat.Money(shop.Today.Revenue) + " (" + time + ")";
+                s.Tooltip = "SysopTV: Shop heute " + ShopFormat.Orders(shop.Today.Orders);
+                s.Detail = shop.Error ?? "";
             }
             if (legacyRunning)
             {

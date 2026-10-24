@@ -303,46 +303,38 @@ namespace SysopTV.Tray
 
         // ---- LED-Matrix: lit dots only, one grid ----
 
+        // Small heading, the main number big, label and secondary value small,
+        // all rows spread evenly. Values that do not fit the 6 px grid take
+        // 4 px, the labels then use the same grid.
         private static Canvas LedStyle(ShopBigView v, Texts t)
         {
             var c = new Canvas();
-            const int width = 224;
-            // Big grid 6 px if the value fits, otherwise 4 px; labels in half the grid,
-            // or in the same grid where half would be smaller than 3 px.
-            int big = Led.BigWidth(t.Main, 6) <= width ? 6 : 4;
-            Func<string, int> small = s => big / 2 >= 3 ? big / 2 : (Led.SmallWidth(s, big) <= width ? big : big / 2);
-            string top = v.Stamp != null ? v.Stamp.ToUpper(German) : t.Title;
-            Led.Small(c, top, 120, 12, small(top), v.Stamp != null ? Led.WarnDim : Led.Dim);
-
-            // The block below the heading, centred in the free height.
-            int mainH = Led.BigHeight(t.Main, big);
-            int labelP = small(t.Label);
-            int h = mainH + 12 + Led.SmallHeight(labelP);
-            int subP = 0, extraP = 0;
+            int big = Led.BigWidth(t.Main, 6) <= 224 ? 6 : 4;
+            int small = big == 6 ? 3 : 4;
+            string top = v.Stamp ?? t.Title;
+            var heights = new System.Collections.Generic.List<int> { Led.TinyHeight(small), Led.BigHeight(t.Main, big), Led.TinyHeight(small) };
+            var pitches = new System.Collections.Generic.List<int> { small, big, small };
             if (t.Sub != null)
             {
-                subP = big / 2 >= 3 ? big / 2 : big;
-                h += 12 + Led.BigHeight(t.Sub, subP);
+                heights.Add(Led.BigHeight(t.Sub, small));
+                pitches.Add(small);
             }
             if (t.Extra != null)
             {
-                extraP = small(t.Extra.ToUpper(German));
-                h += 10 + Led.SmallHeight(extraP);
+                heights.Add(Led.TinyHeight(small));
+                pitches.Add(small);
             }
-            int y = 40 + (232 - 40 - h) / 2;
-            Led.Big(c, t.Main, 120, y, big, Led.On);
-            y += mainH + 12;
-            Led.Small(c, t.Label, 120, y, labelP, Led.Dim);
-            y += Led.SmallHeight(labelP);
+            int[] tops = Led.Spread(heights.ToArray(), pitches.ToArray());
+            Led.Tiny(c, top, 120, tops[0], small, v.Stamp != null ? Led.WarnDim : Led.Dim);
+            Led.Big(c, t.Main, 120, tops[1], big, Led.On);
+            Led.Tiny(c, t.Label, 120, tops[2], small, Led.Dim);
             if (t.Sub != null)
             {
-                y += 12;
-                Led.Big(c, t.Sub, 120, y, subP, Led.Dim);
+                Led.Big(c, t.Sub, 120, tops[3], small, Led.Dim);
             }
             if (t.Extra != null)
             {
-                y += 10;
-                Led.Small(c, t.Extra.ToUpper(German), 120, y, extraP, Led.Dim);
+                Led.Tiny(c, t.Extra, 120, tops[3], small, Led.Dim);
             }
             return c;
         }

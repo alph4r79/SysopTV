@@ -4,6 +4,10 @@
 // SysopTV.exe --preview <folder>: writes every picture design with sample
 // data as PNG, 240x240 and three times larger, plus two overview sheets
 // (uebersicht-claude.png, uebersicht-shop.png) with all pictures side by side.
+//
+// SysopTV.exe --docs <folder>: the screens for README and GitHub with fixed
+// sample data (Tuesday 10:42), each 480x480, every pixel doubled without
+// smoothing, no frame, no text in the picture and no metadata in the file.
 // No network.
 
 using System;
@@ -87,6 +91,76 @@ namespace SysopTV.Tray
             Sheet(claude, Path.Combine(folder, "uebersicht-claude.png"));
             Sheet(shop, Path.Combine(folder, "uebersicht-shop.png"));
             return 0;
+        }
+
+        // Fixed moment for the documentation: Tuesday 20.10.2026, 10:42.
+        private static readonly DateTime DocsNow = new DateTime(2026, 10, 20, 10, 42, 0);
+
+        internal static int Docs(string folder)
+        {
+            Directory.CreateDirectory(folder);
+            var now = new DateTimeOffset(DocsNow);
+            // Session 27 % with reset at 12:59 (in 2:17), week 14 % with reset Thursday 23:00.
+            var data = new UsageData
+            {
+                State = "ok",
+                Session = new UsageLimit { Used = 27, ResetsAt = now.AddHours(2).AddMinutes(17).ToUnixTimeSeconds() },
+                Week = new UsageLimit { Used = 14, ResetsAt = new DateTimeOffset(DocsNow.Date.AddDays(2).AddHours(23)).ToUnixTimeSeconds() }
+            };
+            foreach (DesignInfo d in ClaudeDesigns.All)
+            {
+                DocsPng(ClaudeDesigns.Render(d.Id, UsageView.Build(data, false, null, true, now)), folder, "claude-" + d.Id);
+            }
+            DocsPng(ClaudeDesigns.Render("dos", UsageView.Build(data, false, null, false, now)), folder, "claude-dos-uebrig");
+            var warn = new UsageData
+            {
+                State = "ok",
+                Session = new UsageLimit { Used = 86, ResetsAt = data.Session.ResetsAt },
+                Week = new UsageLimit { Used = 41, ResetsAt = data.Week.ResetsAt }
+            };
+            DocsPng(ClaudeDesigns.Render("fallblatt", UsageView.Build(warn, false, null, true, now)), folder, "claude-fallblatt-warnung");
+
+            foreach (DesignInfo style in ShopBig.Styles)
+            {
+                var big = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow, Period = "day", Content = "both" };
+                DocsPng(ShopBig.Render(style.Id, big), folder, "shop-gross-" + style.Id + "-heute");
+            }
+            string[][] details = { new[] { "dos", "tabelle" }, new[] { "heute", "bestellliste" }, new[] { "bon", "kassenbon" }, new[] { "woche", "wochendiagramm" } };
+            foreach (string[] d in details)
+            {
+                var v = new ShopView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow };
+                DocsPng(ShopDesigns.Render(d[0], v), folder, "shop-" + d[1]);
+            }
+            return 0;
+        }
+
+        // 480x480 PNG, nearest neighbour, only the chunks a PNG needs (no gamma,
+        // no time, no text), so the file carries no metadata.
+        private static void DocsPng(Canvas c, string folder, string name)
+        {
+            byte[] png;
+            using (Bitmap big = c.ToBitmap(2))
+            using (var ms = new MemoryStream())
+            {
+                big.Save(ms, ImageFormat.Png);
+                png = ms.ToArray();
+            }
+            using (var outFile = File.Create(Path.Combine(folder, name + ".png")))
+            {
+                outFile.Write(png, 0, 8);
+                int p = 8;
+                while (p + 8 <= png.Length)
+                {
+                    int length = (png[p] << 24) | (png[p + 1] << 16) | (png[p + 2] << 8) | png[p + 3];
+                    string type = System.Text.Encoding.ASCII.GetString(png, p + 4, 4);
+                    int size = 12 + length;
+                    if (type == "IHDR" || type == "PLTE" || type == "IDAT" || type == "IEND")
+                    {
+                        outFile.Write(png, p, size);
+                    }
+                    p += size;
+                }
+            }
         }
 
         // Session 27 % with reset in 2:16, week 85 % with reset next Thursday 22:59:30.
