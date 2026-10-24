@@ -75,6 +75,10 @@ namespace SysopTV.Tray
         private readonly Button saveButton = new Button { Text = "Auf dem Würfel speichern", AutoSize = true };
         private readonly Label settingsStatus = new Label { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 2, 0, 4) };
 
+        // Reading the cube; the pictures of the documentation put samples here, so they need no network.
+        internal static Func<string, TimeSpan, CubeInfo> ReadInfo = Cube.GetInfo;
+        internal static Func<string, string, CubeSettings> ReadSettings = Cube.GetSettings;
+
         private CubeEntry selected;
         private CubeSettings loaded;      // values of the selected cube, null until a load worked
         private int loadToken;            // a newer load makes older answers worthless
@@ -477,6 +481,14 @@ namespace SysopTV.Tray
             ShowFunctionRows();
         }
 
+        internal void SelectIndex(int index)
+        {
+            if (index >= 0 && index < list.Items.Count)
+            {
+                list.SelectedIndex = index;
+            }
+        }
+
         // The service took over the design of the cube (a cube from "usage").
         internal void Adopted(CubeEntry c)
         {
@@ -698,7 +710,7 @@ namespace SysopTV.Tray
             }
             testButton.Enabled = false;
             cubeStatus.Text = "Verbinde ...";
-            CubeInfo info = await Task.Run(() => Cube.GetInfo(c.Address, TimeSpan.FromSeconds(4)));
+            CubeInfo info = await Task.Run(() => ReadInfo(c.Address, TimeSpan.FromSeconds(4)));
             if (IsDisposed)
             {
                 return;
@@ -772,7 +784,7 @@ namespace SysopTV.Tray
             string error = null;
             try
             {
-                s = await Task.Run(() => Cube.GetSettings(c.Address, c.AdminPassword));
+                s = await Task.Run(() => ReadSettings(c.Address, c.AdminPassword));
             }
             catch (InvalidOperationException ex)
             {

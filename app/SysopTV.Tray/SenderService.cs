@@ -917,6 +917,38 @@ namespace SysopTV.Tray
             return rows;
         }
 
+        // Only for the pictures of the documentation (--docs): values as if the
+        // program had run for a while, every cube reached with firmware 0.4.3.
+        // Nothing is asked and nothing is sent.
+        internal void ShowSamples(UsageData claudeData, DateTime okTime, Dictionary<string, ShopData> shops)
+        {
+            lastSent = claudeData;
+            lastOk = claudeData;
+            lastOkTime = okTime;
+            lastQuery = okTime;
+            nextRound = okTime.AddSeconds(config.Interval);
+            foreach (KeyValuePair<string, ShopData> s in shops)
+            {
+                feeds[s.Key].Data = s.Value;
+                feeds[s.Key].OkTime = okTime;
+                feeds[s.Key].LastQuery = okTime;
+            }
+            lock (gate)
+            {
+                int i = 0;
+                foreach (CubeEntry c in config.Cubes)
+                {
+                    CubeState st = StateFor(c);
+                    st.Firmware = "0.4.3";
+                    st.CanFrame = true;
+                    st.FrameValid = true;
+                    st.LastResult = new SendResult { Ok = true, Status = 200, Message = "HTTP 200" };
+                    st.LastSend = okTime.AddSeconds(30 - 4 * i++);
+                }
+            }
+            UpdateStatus();
+        }
+
         private bool legacyRunning;
 
         // Set by the check for the old PowerShell sender every 10 minutes.

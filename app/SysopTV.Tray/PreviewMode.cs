@@ -6,10 +6,12 @@
 // without numbers, plus two overview sheets
 // (uebersicht-claude.png, uebersicht-shop.png) with all pictures side by side.
 //
-// SysopTV.exe --docs <folder>: the screens for README and GitHub with fixed
-// sample data (Tuesday 10:42), each 480x480, every pixel doubled without
-// smoothing, no frame, no text in the picture and no metadata in the file.
-// No network.
+// SysopTV.exe --docs <folder>: the pictures of the documentation without
+// metadata in the files. <folder>\screens gets the screens with fixed sample
+// data (Tuesday 10:42), each 480x480, every pixel doubled without smoothing.
+// <folder>\app gets every page of the window with sample data, drawn without
+// showing it. For that all files of the program go to a fresh temp folder,
+// the real settings are never read or written. No network.
 
 using System;
 using System.Collections.Generic;
@@ -18,6 +20,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
+using System.Windows.Forms;
 
 namespace SysopTV.Tray
 {
@@ -130,8 +133,9 @@ namespace SysopTV.Tray
         // Fixed moment for the documentation: Tuesday 20.10.2026, 10:42.
         private static readonly DateTime DocsNow = new DateTime(2026, 10, 20, 10, 42, 0);
 
-        internal static int Docs(string folder)
+        internal static int Docs(string imagesFolder)
         {
+            string folder = Path.Combine(imagesFolder, "screens");
             Directory.CreateDirectory(folder);
             var now = new DateTimeOffset(DocsNow);
             // Session 27 % with reset at 12:59 (in 2:17), week 14 % with reset Thursday 23:00.
@@ -167,21 +171,217 @@ namespace SysopTV.Tray
                 var v = new ShopView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow };
                 DocsPng(ShopDesigns.Render(d[0], v), folder, "shop-" + d[1]);
             }
-            return 0;
+            return DocsApp(Path.Combine(imagesFolder, "app"));
+        }
+
+        // The pages of the window, file name and the cube chosen on "Würfel" (-1 for none).
+        private static readonly string[][] AppPages =
+        {
+            new[] { "Übersicht", "-1", "app-overview" },
+            new[] { "Würfel", "0", "app-cubes-claude" },
+            new[] { "Würfel", "1", "app-cubes-shopify" },
+            new[] { "Würfel", "2", "app-cubes-woocommerce" },
+            new[] { "Claude", "-1", "app-claude" },
+            new[] { "Shopify", "-1", "app-shopify" },
+            new[] { "WooCommerce", "-1", "app-woocommerce" },
+            new[] { "Programm", "-1", "app-program" }
+        };
+
+        private static int DocsApp(string folder)
+        {
+            Directory.CreateDirectory(folder);
+            string data = Path.Combine(Path.GetTempPath(), "sysoptv-docs-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(data);
+            string previousDir = AppPaths.DataDirOption;
+            bool previousQuiet = Log.Quiet;
+            Func<string, TimeSpan, CubeInfo> readInfo = CubesPage.ReadInfo;
+            Func<string, string, CubeSettings> readSettings = CubesPage.ReadSettings;
+            Func<DateTime?> login = ClaudePage.LoginSource;
+            AppPaths.DataDirOption = data;
+            Log.Quiet = true;
+            try
+            {
+                DateTime now = DateTime.Now;
+                var cfg = new AppConfig();
+                cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.50", Function = CubeFunction.Claude, Design = "dos", AdminPassword = "example-password" });
+                cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.51", Function = CubeFunction.Shopify, ShopView = ShopBig.ViewBig, BigStyle = "bon", AdminPassword = "example-password" });
+                cfg.Cubes.Add(new CubeEntry { Address = "192.168.178.52", Function = CubeFunction.WooCommerce, ShopView = ShopBig.ViewDetails, Design = "dos", AdminPassword = "example-password" });
+                cfg.Shop.Domain = "myshop.myshopify.com";
+                cfg.Shop.DisplayName = "My Shop";
+                cfg.Shop.ClientId = "your-client-id";
+                cfg.Shop.ClientSecret = "your-client-secret";
+                cfg.Woo.Url = "https://shop.example.com";
+                cfg.Woo.DisplayName = "My Shop";
+                cfg.Woo.Key = "your-plugin-key";
+                CubesPage.ReadInfo = (address, timeout) => SampleInfo(cfg, address);
+                CubesPage.ReadSettings = (address, password) => SampleSettings(cfg, address);
+                ClaudePage.LoginSource = () => now.AddHours(5).AddMinutes(12);
+
+                var service = new SenderService(cfg, Path.Combine(data, "state.json"));
+                ShopData shopify = ShopData.Sample(4, now);
+                shopify.ShopName = "My Shop";
+                ShopData woo = ShopData.Sample(6, now);
+                woo.ShopName = "My Shop";
+                woo.Currency = "EUR";
+                woo.Plugin = "0.2.0";
+                var docsNow = new DateTimeOffset(now);
+                var usage = new UsageData
+                {
+                    State = "ok",
+                    Session = new UsageLimit { Used = 27, ResetsAt = docsNow.AddHours(2).AddMinutes(17).ToUnixTimeSeconds() },
+                    Week = new UsageLimit { Used = 14, ResetsAt = docsNow.AddDays(2).AddHours(12).ToUnixTimeSeconds() }
+                };
+                service.ShowSamples(usage, now.AddSeconds(-40), new Dictionary<string, ShopData>
+                {
+                    { ShopSources.Shopify, shopify },
+                    { ShopSources.WooCommerce, woo }
+                });
+
+                // A real message loop like in the running program: a timer opens
+                // one page after the other and takes the picture 3 seconds later,
+                // when the page has loaded what it shows.
+                using (var form = new MainForm(cfg, service, null))
+                using (var timer = new System.Windows.Forms.Timer { Interval = 100 })
+                {
+                    form.StartPosition = FormStartPosition.Manual;
+                    form.Location = new Point(-4000, -4000);
+                    form.ShowInTaskbar = false;
+                    int index = -1;
+                    bool capture = false;
+                    DateTime next = DateTime.Now.AddSeconds(1);
+                    timer.Tick += (sender, e) =>
+                    {
+                        if (DateTime.Now < next)
+                        {
+                            return;
+                        }
+                        if (capture)
+                        {
+                            Mask(form, data);
+                            using (var bmp = new Bitmap(form.Width, form.Height))
+                            {
+                                form.DrawToBitmap(bmp, new Rectangle(0, 0, form.Width, form.Height));
+                                WritePng(bmp, Path.Combine(folder, AppPages[index][2] + ".png"));
+                            }
+                            capture = false;
+                            next = DateTime.Now.AddMilliseconds(200);
+                            return;
+                        }
+                        index++;
+                        if (index >= AppPages.Length)
+                        {
+                            timer.Stop();
+                            form.Close();
+                            return;
+                        }
+                        form.ShowForDocs(AppPages[index][0], int.Parse(AppPages[index][1]));
+                        capture = true;
+                        next = DateTime.Now.AddSeconds(3);
+                    };
+                    timer.Start();
+                    Application.Run(form);
+                }
+                service.Dispose();
+                return 0;
+            }
+            finally
+            {
+                CubesPage.ReadInfo = readInfo;
+                CubesPage.ReadSettings = readSettings;
+                ClaudePage.LoginSource = login;
+                AppPaths.DataDirOption = previousDir;
+                Log.Quiet = previousQuiet;
+                try
+                {
+                    Directory.Delete(data, true);
+                }
+                catch (IOException)
+                {
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+            }
+        }
+
+        // The temp folder must not appear in a picture: the normal folder instead.
+        private static void Mask(Control c, string data)
+        {
+            if (c.Text.IndexOf(data, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                c.Text = c.Text.Replace(data, "%LOCALAPPDATA%\\SysopTV");
+            }
+            foreach (Control child in c.Controls)
+            {
+                Mask(child, data);
+            }
+        }
+
+        // Device names as the firmware makes them, shown in the settings of the
+        // cube. /api/info reports none, so the list keeps the short address.
+        private static string SampleName(AppConfig cfg, string address)
+        {
+            string[] names = { "sysoptv-3fa2", "sysoptv-7c1e", "sysoptv-b804" };
+            int i = cfg.Cubes.FindIndex(x => x.Address == address);
+            return names[Math.Max(0, i) % names.Length];
+        }
+
+        private static CubeInfo SampleInfo(AppConfig cfg, string address)
+        {
+            var info = new CubeInfo
+            {
+                Address = address,
+                Ip = address,
+                Hostname = SampleName(cfg, address) + ".local",
+                DeviceName = "",
+                Version = "0.4.3",
+                UptimeText = "2 Tage 3 h 41 min",
+                FrameValid = true
+            };
+            info.Capabilities.AddRange(new[] { "usage", "settings", "frame" });
+            return info;
+        }
+
+        private static CubeSettings SampleSettings(AppConfig cfg, string address)
+        {
+            var s = new CubeSettings
+            {
+                Design = 2,
+                CycleSeconds = 0,
+                ShowUsed = true,
+                Brightness = 80,
+                NightEnabled = true,
+                NightFrom = "22:00",
+                NightTo = "07:00",
+                NightBrightness = 10,
+                DeviceName = SampleName(cfg, address)
+            };
+            for (int i = 0; i < ClaudeDesigns.FirmwareCount; i++)
+            {
+                s.DesignNames.Add(ClaudeDesigns.All[i].Label);
+            }
+            return s;
         }
 
         // 480x480 PNG, nearest neighbour, only the chunks a PNG needs (no gamma,
         // no time, no text), so the file carries no metadata.
         private static void DocsPng(Canvas c, string folder, string name)
         {
-            byte[] png;
             using (Bitmap big = c.ToBitmap(2))
+            {
+                WritePng(big, Path.Combine(folder, name + ".png"));
+            }
+        }
+
+        private static void WritePng(Bitmap bmp, string file)
+        {
+            byte[] png;
             using (var ms = new MemoryStream())
             {
-                big.Save(ms, ImageFormat.Png);
+                bmp.Save(ms, ImageFormat.Png);
                 png = ms.ToArray();
             }
-            using (var outFile = File.Create(Path.Combine(folder, name + ".png")))
+            using (var outFile = File.Create(file))
             {
                 outFile.Write(png, 0, 8);
                 int p = 8;

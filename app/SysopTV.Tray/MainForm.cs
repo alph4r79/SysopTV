@@ -227,6 +227,18 @@ namespace SysopTV.Tray
             };
         }
 
+        // For the pictures of the documentation: opens a page, on "Würfel" with
+        // the cube at this place in the list.
+        internal void ShowForDocs(string title, int cube)
+        {
+            ctx.OpenPage(title);
+            var cubes = current as CubesPage;
+            if (cubes != null && cube >= 0)
+            {
+                cubes.SelectIndex(cube);
+            }
+        }
+
         // The service took over the design of a cube that showed its own one
         // ("usage" up to 0.6.0); the copy of the window gets it as well.
         internal void Adopted(CubeEntry from)

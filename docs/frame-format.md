@@ -1,5 +1,7 @@
 # SysopTV picture format "SYF1"
 
+Part of the [developer documentation](developers.md#interfaces-of-the-cube). Back to the [overview of all guides](README.md).
+
 Firmware 0.4.0 and newer can show pictures that a PC draws. The PC sends a picture or a part of it with `POST /api/frame`. The cube decodes it while it is being received and draws it line by line, so it never holds the whole picture in memory.
 
 ## Request

@@ -22,6 +22,9 @@ namespace SysopTV.Tray
         private readonly Label stand = Value();
         private readonly Button queryNow = new Button { Text = "Jetzt abfragen", AutoSize = true };
         private readonly Label queryNote = Note("");
+        // Where the end of the login comes from; the pictures of the documentation put a sample here.
+        internal static Func<DateTime?> LoginSource = ClaudeClient.LoginExpires;
+
         private DateTime? loginExpires;
         private DateTime loginRead = DateTime.MinValue;
 
@@ -126,7 +129,7 @@ namespace SysopTV.Tray
         {
             if (DateTime.Now - loginRead > TimeSpan.FromSeconds(30))
             {
-                loginExpires = ClaudeClient.LoginExpires();
+                loginExpires = LoginSource();
                 loginRead = DateTime.Now;
             }
             UsageData data = Ctx.Service.LastData;
