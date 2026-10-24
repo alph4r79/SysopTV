@@ -32,6 +32,7 @@ namespace SysopTV.Tray
             config = AppConfig.Load();
             service = new SenderService(config);
             service.StatusChanged += () => invoker.BeginInvoke((Action)UpdateUi);
+            service.CubeAdopted += address => invoker.BeginInvoke((Action)(() => Adopted(address)));
 
             statusItem = new ToolStripMenuItem("Noch keine Daten") { Enabled = false };
             var menu = new ContextMenuStrip();
@@ -146,6 +147,29 @@ namespace SysopTV.Tray
                     notify.ShowBalloonTip(5000, "SysopTV", text, icon);
                 }
                 lastCategory = st.Category;
+            }
+        }
+
+        // A cube taken over from "usage" got the design of the cube: the
+        // service changed its settings (the same object as config), keep them.
+        private void Adopted(string address)
+        {
+            CubeEntry c = config.Cubes.Find(x => x.Address == address);
+            if (c == null)
+            {
+                return;
+            }
+            try
+            {
+                config.Save();
+            }
+            catch (Exception ex)
+            {
+                Log.Write("Einstellungen nicht gespeichert: " + ex.Message);
+            }
+            if (mainForm != null && !mainForm.IsDisposed)
+            {
+                mainForm.Adopted(c);
             }
         }
 

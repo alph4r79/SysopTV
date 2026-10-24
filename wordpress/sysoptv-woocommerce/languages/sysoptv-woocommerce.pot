@@ -2,7 +2,7 @@
 # This file is distributed under the GPL-3.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: SysopTV for WooCommerce 0.1.0\\n"
+"Project-Id-Version: SysopTV for WooCommerce 0.2.0\\n"
 "MIME-Version: 1.0\\n"
 "Content-Type: text/plain; charset=UTF-8\\n"
 "Content-Transfer-Encoding: 8bit\\n"
@@ -129,7 +129,7 @@ msgid "Which data leaves the shop"
 msgstr ""
 
 #: includes/class-sysoptv-wc-settings.php
-msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
+msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, this year, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
 msgstr ""
 
 #: includes/class-sysoptv-wc-settings.php

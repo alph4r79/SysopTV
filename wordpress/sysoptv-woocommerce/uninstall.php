@@ -13,6 +13,8 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 
 delete_option( 'sysoptv_wc_key_hash' );
 delete_option( 'sysoptv_wc_last_success' );
+delete_option( 'sysoptv_wc_days' );
+delete_option( 'sysoptv_wc_recount' );
 delete_transient( 'sysoptv_wc_stats' );
 delete_transient( 'sysoptv_wc_last_request' );
 

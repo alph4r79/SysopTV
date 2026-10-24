@@ -41,6 +41,14 @@ namespace SysopTV.Tray
         internal bool Rescue;
         internal List<string> Capabilities = new List<string>();
         internal bool? FrameValid;     // since 0.4.3: the screen shows the whole picture from the PC
+        internal string Design;        // since 0.3.1: name of the design the cube shows, like "DOS"
+        internal int? DesignCycle;     // since 0.3.1: automatic change of the cube in seconds
+        internal bool? ShowUsed;       // since 0.3.1: the cube shows used (true) or remaining (false)
+
+        internal bool CanFrame
+        {
+            get { return Can("frame"); }
+        }
 
         internal bool Can(string capability)
         {
@@ -220,6 +228,20 @@ namespace SysopTV.Tray
                     long uptime;
                     long.TryParse(Text(j, "uptime"), NumberStyles.Integer, CultureInfo.InvariantCulture, out uptime);
                     info.Uptime = uptime;
+                    if (Value(j, "design") is string)
+                    {
+                        info.Design = Text(j, "design");
+                    }
+                    int cycle;
+                    if (int.TryParse(Text(j, "designCycle"), NumberStyles.Integer, CultureInfo.InvariantCulture, out cycle))
+                    {
+                        info.DesignCycle = cycle;
+                    }
+                    string mode = Text(Value(j, "usage") as Dictionary<string, object>, "mode");
+                    if (mode == "verbraucht" || mode == "übrig")
+                    {
+                        info.ShowUsed = mode == "verbraucht";
+                    }
                     var caps = Value(j, "capabilities") as object[];
                     if (caps != null)
                     {

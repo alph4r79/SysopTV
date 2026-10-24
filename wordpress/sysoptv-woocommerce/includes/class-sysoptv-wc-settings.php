@@ -126,7 +126,7 @@ class SysopTV_WC_Settings {
 		echo '</tbody></table>';
 
 		echo '<h2>' . esc_html__( 'Which data leaves the shop', 'sysoptv-woocommerce' ) . '</h2>';
-		echo '<p>' . esc_html__( 'Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today\'s orders (at most 20) the order number, time, amount and whether it is shipped.', 'sysoptv-woocommerce' ) . '</p>';
+		echo '<p>' . esc_html__( 'Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, this year, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today\'s orders (at most 20) the order number, time, amount and whether it is shipped.', 'sysoptv-woocommerce' ) . '</p>';
 		echo '<p><strong>' . esc_html__( 'No customer data: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items.', 'sysoptv-woocommerce' ) . '</strong></p>';
 		echo '</div>';
 	}

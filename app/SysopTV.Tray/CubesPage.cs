@@ -3,9 +3,12 @@
 //
 // Page "Würfel": the list of cubes on the left, the selected cube on the
 // right in two parts. "Verbindung und Funktion" is stored in the program and
-// saved as soon as a field is left. "Einstellungen im Würfel" is stored in the
-// cube: loaded on its own when an admin password is set, and written only with
-// "Auf dem Würfel speichern", which stays locked until a load worked.
+// saved as soon as a field is left. The function is Claude Limits, Shopify or
+// WooCommerce; the program draws every picture itself, cubes without picture
+// mode (firmware before 0.4.0) get only the numbers. "Einstellungen im Würfel"
+// is stored in the cube: loaded on its own when an admin password is set, and
+// written only with "Auf dem Würfel speichern", which stays locked until a
+// load worked.
 
 using System;
 using System.Collections.Generic;
@@ -22,42 +25,45 @@ namespace SysopTV.Tray
     {
         private static readonly string[] CycleLabels = { "aus", "alle 30 Sekunden", "alle 60 Sekunden" };
 
+        internal const string OldFirmwareText = "Firmware zu alt für alle Designs. Bitte die Firmware aktualisieren.";
+        internal const string FallbackText = "Zeigt der Würfel nur, wenn einige Minuten keine Bilder vom Programm kommen.";
+
         // List
-        private readonly ListBox list = new ListBox { Width = 180, Height = 150, IntegralHeight = false };
+        private readonly ListBox list = new ListBox { Width = 170, Height = 150, IntegralHeight = false };
         private readonly Button searchButton = new Button { Text = "Suchen" };
         private readonly Button addButton = new Button { Text = "Von Hand hinzufügen" };
         private readonly Button removeButton = new Button { Text = "Entfernen" };
-        private readonly ListBox found = new ListBox { Width = 180, Height = 80, IntegralHeight = false, Visible = false };
-        private readonly Label listStatus = new Label { AutoSize = true, MaximumSize = new Size(180, 0), ForeColor = SystemColors.GrayText };
+        private readonly ListBox found = new ListBox { Width = 170, Height = 80, IntegralHeight = false, Visible = false };
+        private readonly Label listStatus = new Label { AutoSize = true, MaximumSize = new Size(170, 0), ForeColor = SystemColors.GrayText };
 
         // Verbindung und Funktion (stored in the program)
         private readonly TableLayoutPanel connGrid = Grid();
-        private readonly TextBox address = new TextBox { Width = 240 };
-        private readonly ComboBox function = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 240 };
+        private readonly TextBox address = new TextBox { Width = 190 };
+        private readonly ComboBox function = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140 };
+        private readonly LinkLabel functionNote = new LinkLabel { AutoSize = true, MaximumSize = new Size(310, 0), Margin = new Padding(0, 0, 0, 4) };
         private readonly ComboBox design = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         private readonly RadioButton showUsed = new RadioButton { Text = "verbraucht", AutoSize = true };
         private readonly RadioButton showLeft = new RadioButton { Text = "übrig", AutoSize = true };
         private readonly ComboBox cycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
         private readonly TextBox apiKey = new TextBox { Width = 240, UseSystemPasswordChar = true };
         private readonly TextBox adminPassword = new TextBox { Width = 240, UseSystemPasswordChar = true };
-        private readonly Button testButton = new Button { Text = "Verbindung testen", AutoSize = true };
-        private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(190, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(6, 3, 0, 0) };
-        private readonly ComboBox shopSource = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
-        private readonly ComboBox shopView = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
+        private readonly Button testButton = new Button { Text = "Verbindung testen", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+        private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(170, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 6, 0, 0) };
+        private readonly ComboBox shopView = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110 };
         private readonly ComboBox period = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
         private readonly ComboBox periodCycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
         private readonly ComboBox content = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
         private readonly ComboBox bigStyle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
         private readonly CheckBox claudeFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
         private readonly CheckBox bigFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
-        private Control designRow, modeRow, cycleRow, viewRow, periodRow, contentRow, styleRow;
+        private readonly Label viewCaption = Caption("Ansicht");
+        private Control designRow, modeRow, cycleRow, periodRow, contentRow, styleRow;
 
         // Einstellungen im Würfel (stored in the cube)
         private readonly TableLayoutPanel cubeGrid = Grid();
         private readonly Panel browserPanel = new Panel { AutoSize = true, Visible = false };
-        private readonly ComboBox fwDesign = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-        private readonly ComboBox fwCycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
-        private readonly RadioButton fwUsed = new RadioButton { Text = "verbraucht", AutoSize = true };
+        private readonly ComboBox fwDesign = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        private readonly RadioButton fwUsed = new RadioButton { Text = "verbraucht", AutoSize = true, Margin = new Padding(8, 3, 0, 0) };
         private readonly RadioButton fwLeft = new RadioButton { Text = "übrig", AutoSize = true };
         private readonly NumericUpDown brightness = new NumericUpDown { Minimum = 10, Maximum = 100, Increment = 5, Width = 60 };
         private readonly CheckBox night = new CheckBox { Text = "an", AutoSize = true, Margin = new Padding(0, 5, 8, 0) };
@@ -68,7 +74,6 @@ namespace SysopTV.Tray
         private readonly Button reloadButton = new Button { Text = "Neu laden", AutoSize = true };
         private readonly Button saveButton = new Button { Text = "Auf dem Würfel speichern", AutoSize = true };
         private readonly Label settingsStatus = new Label { AutoSize = true, MaximumSize = new Size(400, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(0, 2, 0, 4) };
-        private Control fwDesignRow, fwCycleRow, fwModeRow;
 
         private CubeEntry selected;
         private CubeSettings loaded;      // values of the selected cube, null until a load worked
@@ -81,31 +86,32 @@ namespace SysopTV.Tray
         internal CubesPage(PageContext ctx) : base(ctx)
         {
             cycle.Items.AddRange(CycleLabels);
-            fwCycle.Items.AddRange(CycleLabels);
 
             var left = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Margin = new Padding(0, 0, 16, 0) };
             left.Controls.Add(list);
             foreach (Button b in new[] { searchButton, addButton, removeButton })
             {
-                b.Width = 180;
+                b.Width = 170;
                 b.Height = 28;
                 b.Margin = new Padding(0, 4, 0, 0);
                 left.Controls.Add(b);
             }
+            // The result of "Verbindung testen" stands below the list.
+            left.Controls.Add(cubeStatus);
             left.Controls.Add(found);
             left.Controls.Add(listStatus);
 
-            AddRow(connGrid, "Adresse (IP oder Name)", address);
-            AddRow(connGrid, "Funktion", function);
-            shopSource.Items.AddRange(ShopSources.All);
+            function.Items.AddRange(CubeFunction.All);
             shopView.Items.AddRange(ShopBig.Views);
             period.Items.AddRange(ShopBig.Periods);
             periodCycle.Items.AddRange(new object[] { "nicht wechseln", "alle 30 Sekunden", "alle 60 Sekunden" });
             content.Items.AddRange(ShopBig.Contents);
             bigStyle.Items.AddRange(ShopBig.Styles);
-            // Source and view share one row, so the page still fits without scrolling.
-            viewRow = Row(shopSource, Caption("Ansicht"), shopView);
-            AddRow(connGrid, "Quelle", viewRow);
+
+            AddRow(connGrid, "Adresse (IP oder Name)", Row(address, testButton));
+            // Function and view share one row, so the page fits without scrolling.
+            AddRow(connGrid, "Funktion", Row(function, viewCaption, shopView));
+            AddRow(connGrid, null, functionNote);
             designRow = Row(design, claudeFlip);
             AddRow(connGrid, "Design", designRow);
             modeRow = Row(showUsed, showLeft);
@@ -120,14 +126,21 @@ namespace SysopTV.Tray
             AddRow(connGrid, "Stil", styleRow);
             AddRow(connGrid, "API-Schlüssel (optional)", apiKey);
             AddRow(connGrid, "Admin-Passwort", adminPassword);
-            AddRow(connGrid, null, Row(testButton, cubeStatus));
 
-            fwDesignRow = fwDesign;
-            AddRow(cubeGrid, "Design", fwDesignRow);
-            fwCycleRow = fwCycle;
-            AddRow(cubeGrid, "Automatisch wechseln", fwCycleRow);
-            fwModeRow = Row(fwUsed, fwLeft);
-            AddRow(cubeGrid, "Prozent zeigen", fwModeRow);
+            // The design of the cube itself only shows when the pictures stop.
+            var fallbackCaption = Caption("Ersatzanzeige, wenn der PC nichts schickt");
+            fallbackCaption.MaximumSize = new Size(170, 0);
+            int fallbackRow = cubeGrid.RowCount;
+            cubeGrid.RowCount = fallbackRow + 1;
+            cubeGrid.Controls.Add(fallbackCaption, 0, fallbackRow);
+            cubeGrid.Controls.Add(Row(fwDesign, fwUsed, fwLeft), 1, fallbackRow);
+            var fallbackNote = Note(FallbackText);
+            fallbackNote.MaximumSize = new Size(480, 0);
+            fallbackNote.Margin = new Padding(0, 0, 0, 6);
+            int noteRow = cubeGrid.RowCount;
+            cubeGrid.RowCount = noteRow + 1;
+            cubeGrid.Controls.Add(fallbackNote, 0, noteRow);
+            cubeGrid.SetColumnSpan(fallbackNote, 2);
             AddRow(cubeGrid, "Helligkeit", Row(brightness, Caption("%")));
             AddRow(cubeGrid, "Nachtmodus", Row(night, Caption("von"), nightFrom, Caption("bis"), nightTo));
             AddRow(cubeGrid, "Helligkeit nachts", Row(nightBrightness, Caption("%")));
@@ -135,12 +148,13 @@ namespace SysopTV.Tray
 
             var info = Note("Dieser Würfel hat noch keine Schnittstelle für Einstellungen (ab Firmware 0.4.0). Die Seite im Browser kann alles einstellen.");
             var open = new Button { Text = "Einstellungen am Würfel öffnen", AutoSize = true, Top = 40 };
+            info.MaximumSize = new Size(440, 0);
             open.Click += (s, e) => OpenBrowser("settings");
             browserPanel.Controls.Add(info);
             browserPanel.Controls.Add(open);
 
             // The buttons sit in the header of their part, so they never slide out of view.
-            var cubeHeader = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+            var cubeHeader = new TableLayoutPanel { ColumnCount = 2, AutoSize = true, Margin = new Padding(0, 4, 0, 0) };
             cubeHeader.Controls.Add(SectionTitle("Einstellungen im Würfel"), 0, 0);
             cubeHeader.Controls.Add(Row(reloadButton, saveButton), 1, 0);
 
@@ -166,6 +180,14 @@ namespace SysopTV.Tray
                     AddFound(ci);
                 }
             };
+            functionNote.LinkClicked += (s, e) =>
+            {
+                Action<string> openPage = Ctx.OpenPage;
+                if (openPage != null && selected != null)
+                {
+                    openPage(CubeFunction.Label(selected.Function));
+                }
+            };
 
             // Program settings: saved when a field is left or a choice changes.
             address.Leave += (s, e) => Commit();
@@ -180,11 +202,10 @@ namespace SysopTV.Tray
                 }
             };
             function.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
-            design.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
+            design.SelectedIndexChanged += (s, e) => { CommitDesign(); ShowFlip(); };
             showUsed.CheckedChanged += (s, e) => Commit();
             cycle.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
             shopView.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
-            shopSource.SelectedIndexChanged += (s, e) => Commit();
             period.SelectedIndexChanged += (s, e) => Commit();
             periodCycle.SelectedIndexChanged += (s, e) => Commit();
             content.SelectedIndexChanged += (s, e) => Commit();
@@ -231,6 +252,46 @@ namespace SysopTV.Tray
             return loaded != null && !busy;
         }
 
+        // The functions a cube can have: Shopify and WooCommerce need picture
+        // mode. A cube that is not reached yet gets all three. A shop cube keeps
+        // its function in the list, so nothing changes without being chosen.
+        internal static DesignInfo[] FunctionsFor(CubeInfo info, CubeEntry c)
+        {
+            if (info == null || info.CanFrame || c.IsShop)
+            {
+                return CubeFunction.All;
+            }
+            return new[] { CubeFunction.All[0] };
+        }
+
+        // The designs for Claude Limits: all ten with picture mode, otherwise
+        // the six the firmware draws itself.
+        internal static DesignInfo[] ClaudeDesignsFor(CubeInfo info)
+        {
+            if (info != null && !info.CanFrame)
+            {
+                return ClaudeDesigns.All.Take(ClaudeDesigns.FirmwareCount).ToArray();
+            }
+            return ClaudeDesigns.All;
+        }
+
+        // The hint below the function, null if there is none. Link is the page
+        // to open, null for a hint without a link.
+        internal static string FunctionHint(CubeInfo info, CubeEntry c, AppConfig cfg, out string link)
+        {
+            link = null;
+            if (info != null && !info.CanFrame)
+            {
+                return OldFirmwareText;
+            }
+            if (c.IsShop && !cfg.SourceConfigured(c.ShopSource))
+            {
+                link = CubeFunction.Label(c.Function);
+                return "Zugang fehlt noch: Seite „" + link + "“ öffnen";
+            }
+            return null;
+        }
+
         private static Label SectionTitle(string text)
         {
             return new Label
@@ -245,7 +306,7 @@ namespace SysopTV.Tray
 
         private static Label Line()
         {
-            return new Label { Height = 1, Width = 440, BackColor = SystemColors.ControlDark, Margin = new Padding(0, 4, 0, 0) };
+            return new Label { Height = 1, Width = 460, BackColor = SystemColors.ControlDark, Margin = new Padding(0, 2, 0, 0) };
         }
 
         private sealed class Item
@@ -255,13 +316,6 @@ namespace SysopTV.Tray
             {
                 return Cube.Title.Length > 0 ? Cube.Title : "(neu, ohne Adresse)";
             }
-        }
-
-        private sealed class Choice
-        {
-            internal string Value;
-            internal string Label;
-            public override string ToString() { return Label; }
         }
 
         private void FillList()
@@ -281,7 +335,19 @@ namespace SysopTV.Tray
             }
         }
 
-        // Fields of the selected cube into the working copy, then save.
+        private CubeInfo InfoOf(CubeEntry c)
+        {
+            CubeInfo info = null;
+            if (c != null)
+            {
+                infos.TryGetValue(c.Address, out info);
+            }
+            return info;
+        }
+
+        // Fields of the selected cube into the working copy, then save. The
+        // design is taken only when it is chosen (CommitDesign), so a shorter
+        // list for old firmware never overwrites it.
         private void Commit()
         {
             if (selected == null || filling)
@@ -295,21 +361,11 @@ namespace SysopTV.Tray
             {
                 c.Address = addr;
             }
-            var f = function.SelectedItem as Choice;
-            if (f != null)
-            {
-                c.Function = f.Value;
-            }
-            var d = design.SelectedItem as DesignInfo;
-            if (d != null && c.Designs != null && c.Designs.Contains(d))
-            {
-                c.Design = d.Id;
-            }
+            c.Function = Picked(function, c.Function);
             c.ShowUsed = showUsed.Checked;
             c.CycleSeconds = CubeEntry.CycleChoices[Math.Max(0, cycle.SelectedIndex)];
-            if (c.Function == CubeFunction.ShopFrame)
+            if (c.IsShop)
             {
-                c.ShopSource = Picked(shopSource, c.ShopSource);
                 c.ShopView = Picked(shopView, c.ShopView);
                 c.BigPeriod = Picked(period, c.BigPeriod);
                 c.BigContent = Picked(content, c.BigContent);
@@ -337,10 +393,25 @@ namespace SysopTV.Tray
             }
         }
 
+        private void CommitDesign()
+        {
+            if (selected == null || filling)
+            {
+                return;
+            }
+            var d = design.SelectedItem as DesignInfo;
+            if (d != null && selected.Designs.Contains(d) && d.Id != selected.Design)
+            {
+                selected.Design = d.Id;
+                selected.AdoptCubeDesign = false;
+                Ctx.Save();
+            }
+        }
+
         private static string Snapshot(CubeEntry c)
         {
             return string.Join("|", c.Address, c.Function, c.Design, c.ShowUsed, c.CycleSeconds, c.ApiKeyProtected, c.AdminPasswordProtected,
-                               c.ShopSource, c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
+                               c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
         }
 
         private static string Picked(ComboBox box, string current)
@@ -371,27 +442,11 @@ namespace SysopTV.Tray
             if (!on)
             {
                 settingsStatus.Text = "";
+                ShowRow(connGrid, functionNote, false);
                 return;
             }
-            filling = true;
-            address.Text = selected.Address;
-            apiKey.Text = selected.ApiKey;
-            adminPassword.Text = selected.AdminPassword;
-            showUsed.Checked = selected.ShowUsed;
-            showLeft.Checked = !selected.ShowUsed;
-            cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.CycleSeconds));
-            Pick(shopSource, ShopSources.All, selected.ShopSource);
-            Pick(shopView, ShopBig.Views, selected.ShopView);
-            Pick(period, ShopBig.Periods, selected.BigPeriod);
-            Pick(content, ShopBig.Contents, selected.BigContent);
-            Pick(bigStyle, ShopBig.Styles, selected.BigStyle);
-            periodCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.PeriodCycleSeconds));
-            claudeFlip.Checked = bigFlip.Checked = selected.Animate;
-            CubeInfo info;
-            infos.TryGetValue(selected.Address, out info);
-            FillFunctions(info);
-            filling = false;
-            ShowFunctionRows();
+            FillFields();
+            CubeInfo info = InfoOf(selected);
             ShowCubeArea(info);
             ClearCubeFields();
             var _ = LoadCubeSettings();
@@ -401,21 +456,42 @@ namespace SysopTV.Tray
             }
         }
 
-        // Picture functions only for cubes that can show pictures (firmware 0.4.0 and newer).
+        // The stored values of the selected cube into the fields.
+        private void FillFields()
+        {
+            filling = true;
+            address.Text = selected.Address;
+            apiKey.Text = selected.ApiKey;
+            adminPassword.Text = selected.AdminPassword;
+            showUsed.Checked = selected.ShowUsed;
+            showLeft.Checked = !selected.ShowUsed;
+            cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.CycleSeconds));
+            Pick(shopView, ShopBig.Views, selected.ShopView);
+            Pick(period, ShopBig.Periods, selected.BigPeriod);
+            Pick(content, ShopBig.Contents, selected.BigContent);
+            Pick(bigStyle, ShopBig.Styles, selected.BigStyle);
+            periodCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.PeriodCycleSeconds));
+            claudeFlip.Checked = bigFlip.Checked = selected.Animate;
+            FillFunctions(InfoOf(selected));
+            filling = false;
+            ShowFunctionRows();
+        }
+
+        // The service took over the design of the cube (a cube from "usage").
+        internal void Adopted(CubeEntry c)
+        {
+            if (c == selected)
+            {
+                FillFields();
+            }
+        }
+
         private void FillFunctions(CubeInfo info)
         {
+            DesignInfo[] list = FunctionsFor(info, selected);
             function.Items.Clear();
-            var values = new List<string> { CubeFunction.Usage };
-            if (info != null && info.Can("frame") || selected.Function != CubeFunction.Usage)
-            {
-                values.Add(CubeFunction.ClaudeFrame);
-                values.Add(CubeFunction.ShopFrame);
-            }
-            foreach (string v in values)
-            {
-                function.Items.Add(new Choice { Value = v, Label = CubeFunction.Label(v) });
-            }
-            function.SelectedIndex = Math.Max(0, values.IndexOf(selected.Function));
+            function.Items.AddRange(list);
+            Pick(function, list, selected.Function);
         }
 
         private static void ShowRow(TableLayoutPanel grid, Control c, bool visible)
@@ -428,39 +504,39 @@ namespace SysopTV.Tray
             }
         }
 
-        // Only the fields that count for the function. For pictures the program
-        // decides design, mode and change; for "usage" the cube does.
+        // Only the fields that count for the function.
         private void ShowFunctionRows()
         {
             if (selected == null)
             {
                 return;
             }
-            bool picture = selected.Function != CubeFunction.Usage;
-            bool claude = selected.Function == CubeFunction.ClaudeFrame;
-            bool shop = selected.Function == CubeFunction.ShopFrame;
-            bool big = shop && selected.ShopView == ShopBig.ViewBig;
+            CubeInfo info = InfoOf(selected);
+            bool claude = !selected.IsShop;
+            bool big = selected.ShopBigView;
             bool wasFilling = filling;
             filling = true;
+            DesignInfo[] designs = claude ? ClaudeDesignsFor(info) : ShopDesigns.All;
             design.Items.Clear();
-            if (picture)
-            {
-                design.Items.AddRange(selected.Designs);
-                design.SelectedItem = selected.Designs.First(d => d.Id == selected.DesignOrDefault);
-            }
+            design.Items.AddRange(designs);
+            design.SelectedItem = designs.FirstOrDefault(d => d.Id == selected.DesignOrDefault)
+                                  ?? designs.FirstOrDefault(d => d.Id == ClaudeDesigns.Default) ?? designs[0];
             filling = wasFilling;
+            string link;
+            string hint = FunctionHint(info, selected, Ctx.Config, out link);
+            functionNote.Text = hint ?? "";
+            int linkStart = link != null ? hint.IndexOf("Seite", StringComparison.Ordinal) : -1;
+            functionNote.LinkArea = linkStart >= 0 ? new LinkArea(linkStart, hint.Length - linkStart) : new LinkArea(0, 0);
             SuspendLayout();
-            ShowRow(connGrid, viewRow, shop);
-            ShowRow(connGrid, designRow, picture && !big);
+            ShowRow(connGrid, functionNote, hint != null);
+            shopView.Visible = viewCaption.Visible = !claude;
+            ShowRow(connGrid, designRow, !big);
             ShowRow(connGrid, modeRow, claude);
-            ShowRow(connGrid, cycleRow, picture && !big);
+            ShowRow(connGrid, cycleRow, !big);
             ShowRow(connGrid, periodRow, big);
             ShowRow(connGrid, contentRow, big);
             ShowRow(connGrid, styleRow, big);
             ShowFlip();
-            ShowRow(cubeGrid, fwDesignRow, !picture);
-            ShowRow(cubeGrid, fwCycleRow, !picture);
-            ShowRow(cubeGrid, fwModeRow, !picture);
             ResumeLayout();
         }
 
@@ -472,8 +548,8 @@ namespace SysopTV.Tray
                 return;
             }
             var d = design.SelectedItem as DesignInfo;
-            claudeFlip.Visible = selected.Function == CubeFunction.ClaudeFrame &&
-                                 ((d != null && d.Id == "fallblatt") || cycle.SelectedIndex > 0);
+            bool claudePictures = !selected.IsShop && design.Items.Count > ClaudeDesigns.FirmwareCount;
+            claudeFlip.Visible = claudePictures && ((d != null && d.Id == "fallblatt") || cycle.SelectedIndex > 0);
             var st = bigStyle.SelectedItem as DesignInfo;
             bigFlip.Visible = st != null && st.Id == "fallblatt";
         }
@@ -502,7 +578,6 @@ namespace SysopTV.Tray
             fwDesign.Items.Clear();
             fwDesign.Items.AddRange(DesignNames(null));
             fwDesign.SelectedIndex = 0;
-            fwCycle.SelectedIndex = 0;
             fwUsed.Checked = true;
             fwLeft.Checked = false;
             night.Checked = false;
@@ -546,7 +621,7 @@ namespace SysopTV.Tray
                 listStatus.Text = "Der Würfel " + info.Ip + " ist schon in der Liste.";
                 return;
             }
-            AddCube(new CubeEntry { Address = info.Ip, Name = info.DeviceName ?? "", Function = CubeFunction.Usage }, false);
+            AddCube(new CubeEntry { Address = info.Ip, Name = info.DeviceName ?? "", Function = CubeFunction.Claude }, false);
             listStatus.Text = "Hinzugefügt: " + info.Ip;
         }
 
@@ -726,7 +801,6 @@ namespace SysopTV.Tray
             fwDesign.Items.Clear();
             fwDesign.Items.AddRange(DesignNames(s));
             fwDesign.SelectedIndex = Math.Min(Math.Max(0, s.Design), fwDesign.Items.Count - 1);
-            fwCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, s.CycleSeconds));
             fwUsed.Checked = s.ShowUsed;
             fwLeft.Checked = !s.ShowUsed;
             brightness.Value = Math.Min(100, Math.Max(10, s.Brightness));
@@ -745,13 +819,12 @@ namespace SysopTV.Tray
             {
                 return;
             }
-            bool usage = c.Function == CubeFunction.Usage;
             var s = new CubeSettings
             {
-                // For picture cubes the design settings of the cube stay as they were.
-                Design = usage ? fwDesign.SelectedIndex : loaded.Design,
-                CycleSeconds = usage ? CubeEntry.CycleChoices[Math.Max(0, fwCycle.SelectedIndex)] : loaded.CycleSeconds,
-                ShowUsed = usage ? fwUsed.Checked : loaded.ShowUsed,
+                // The change of the cube is not shown here: the fall back keeps what the cube has.
+                Design = fwDesign.SelectedIndex,
+                CycleSeconds = loaded.CycleSeconds,
+                ShowUsed = fwUsed.Checked,
                 Brightness = (int)brightness.Value,
                 NightEnabled = night.Checked,
                 NightFrom = nightFrom.Text.Trim(),

@@ -1,7 +1,7 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// "Shop als Bild": four designs, 240x240 with the 8x16 VGA font (30
+// Shopify and WooCommerce, view "Details": four designs, 240x240 with the 8x16 VGA font (30
 // characters per line). DOS (table), Shop Heute (today's orders), Kassenbon
 // (receipt) and Shop Woche (bars of the last 7 days).
 
@@ -18,6 +18,7 @@ namespace SysopTV.Tray
         internal string ShopName;
         internal DateTime Now;
         internal string Stamp;  // "Stand HH:MM" if the numbers are not fresh, otherwise null
+        internal string Source = ShopSources.Shopify;
     }
 
     internal static class ShopDesigns
@@ -90,37 +91,56 @@ namespace SysopTV.Tray
             c.Text(Name(v, 23), 4, 1, Align.Left, 1, Black, DosBar);
             c.Text(Clock(v.Now), 236, 1, Align.Right, 1, Black, DosBar);
 
-            c.DoubleFrame(2, 22, 236, 128, DosFrame);
+            c.DoubleFrame(2, 22, 236, 146, DosFrame);
             c.Text("Best.", OrdersRight, 28, Align.Right, 1, DosGray, DosBack);
             c.Text("Umsatz", RevenueRight, 28, Align.Right, 1, DosGray, DosBack);
             DosRow(c, 46, "Heute", d.Today, DosYellow);
             DosRow(c, 64, "Gestern", d.Yesterday, DosWhite);
             DosRow(c, 82, "7 Tage", d.Week, DosWhite);
             DosRow(c, 100, "Monat", d.Month, DosWhite);
-            c.FillRect(8, 121, 224, 1, DosFrame);
-            c.Text("Durchschnitt", LabelX, 127, Align.Left, 1, DosGray, DosBack);
-            string avg = d.Month.Orders > 0 ? ShopFormat.Money(d.Month.Revenue / d.Month.Orders) : "--";
-            c.Text(avg, RevenueRight, 127, Align.Right, 1, DosWhite, DosBack);
-
-            c.Text("Offen:", 6, 160, Align.Left, 1, DosGray, DosBack);
-            if (d.Unshipped > 0)
+            if (d.YearNote == null)
             {
-                c.Text(d.Unshipped + " zu versenden", 70, 160, Align.Left, 1, DosYellow, DosBack);
+                DosRow(c, 118, "Jahr", d.Year, DosWhite);
             }
             else
             {
-                c.Text("nichts offen", 70, 160, Align.Left, 1, DosWhite, DosBack);
+                c.Text("Jahr", LabelX, 118, Align.Left, 1, DosWhite, DosBack);
+                c.Text(YearShort(d.YearNote), RevenueRight, 118, Align.Right, 1, DosGray, DosBack);
             }
-            c.Text("Letzte:", 6, 186, Align.Left, 1, DosGray, DosBack);
+            c.FillRect(8, 139, 224, 1, DosFrame);
+            c.Text("Durchschnitt", LabelX, 145, Align.Left, 1, DosGray, DosBack);
+            string avg = d.Month.Orders > 0 ? ShopFormat.Money(d.Month.Revenue / d.Month.Orders) : "--";
+            c.Text(avg, RevenueRight, 145, Align.Right, 1, DosWhite, DosBack);
+
+            c.Text("Offen:", 6, 176, Align.Left, 1, DosGray, DosBack);
+            if (d.Unshipped > 0)
+            {
+                c.Text(d.Unshipped + " zu versenden", 70, 176, Align.Left, 1, DosYellow, DosBack);
+            }
+            else
+            {
+                c.Text("nichts offen", 70, 176, Align.Left, 1, DosWhite, DosBack);
+            }
+            c.Text("Letzte:", 6, 198, Align.Left, 1, DosGray, DosBack);
             string last = d.LastOrderTime.HasValue
                 ? Clock(d.LastOrderTime.Value) + "  " + ShopFormat.Money(d.LastOrderAmount)
                 : "keine";
-            c.Text(last, 70, 186, Align.Left, 1, DosWhite, DosBack);
+            c.Text(last, 70, 198, Align.Left, 1, DosWhite, DosBack);
 
             c.FillRect(0, 222, 240, 18, DosBar);
-            c.Text("Shopify", 4, 223, Align.Left, 1, Black, DosBar);
+            c.Text(ShopBig.Label(ShopSources.All, v.Source), 4, 223, Align.Left, 1, Black, DosBar);
             c.Text(v.Stamp ?? "Stand vor " + ShopFormat.Age(v.Now - d.FetchedAt), 236, 223, Align.Right, 1, Black, DosBar);
             return c;
+        }
+
+        // The year in one table cell when there is no value.
+        private static string YearShort(string note)
+        {
+            if (note == ShopifyClient.MissingAllOrders)
+            {
+                return "Zugriff fehlt";
+            }
+            return note == WooClient.UpdatePlugin ? "Plugin alt" : "wird gezählt";
         }
 
         private static void DosRow(Canvas c, int y, string label, ShopPeriod p, ushort colour)

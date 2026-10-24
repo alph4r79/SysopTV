@@ -3,7 +3,7 @@
  * Plugin Name:          SysopTV for WooCommerce
  * Plugin URI:           https://github.com/alph4r79/SysopTV
  * Description:          Shows orders and revenue of your WooCommerce shop on a SysopTV desk cube. Provides a small, key protected REST endpoint with totals only, no customer data.
- * Version:              0.1.0
+ * Version:              0.2.0
  * Author:               Christoph Scheel
  * Author URI:           https://github.com/alph4r79
  * License:              GPL-3.0-or-later
@@ -28,7 +28,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SYSOPTV_WC_VERSION', '0.1.0' );
+define( 'SYSOPTV_WC_VERSION', '0.2.0' );
 define( 'SYSOPTV_WC_FILE', __FILE__ );
 define( 'SYSOPTV_WC_DIR', plugin_dir_path( __FILE__ ) );
 

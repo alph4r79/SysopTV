@@ -1,6 +1,6 @@
 # SysopTV for WooCommerce
 
-WordPress plugin that gives the SysopTV Windows program the orders and revenue of a WooCommerce shop, so a SysopTV cube can show them. Version 0.1.0, GPL-3.0-or-later.
+WordPress plugin that gives the SysopTV Windows program the orders and revenue of a WooCommerce shop, so a SysopTV cube can show them. Version 0.2.0, GPL-3.0-or-later.
 
 - One endpoint, `GET /wp-json/sysoptv/v1/stats`, with the key in the header `X-SysopTV-Key`.
 - Totals only, no customer data. The fields are described in [docs/woocommerce-setup.md](../../docs/woocommerce-setup.md).

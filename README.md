@@ -37,7 +37,7 @@ The six designs of the firmware (Säulen, Phosphor, DOS, ANSI, Bernstein, Klassi
 
 ### Shop big view
 
-One period with one big number, here today with orders and revenue, in all seven styles.
+One period with one big number, here today with orders and revenue, in all seven styles, and the period "Dieses Jahr" in Fallblatt.
 
 <table>
   <tr>
@@ -50,6 +50,7 @@ One period with one big number, here today with orders and revenue, in all seven
     <td align="center"><img src="docs/images/screens/shop-gross-hell-heute.png" width="180" alt="Hell"><br>Hell</td>
     <td align="center"><img src="docs/images/screens/shop-gross-fallblatt-heute.png" width="180" alt="Fallblatt"><br>Fallblatt</td>
     <td align="center"><img src="docs/images/screens/shop-gross-gruen-heute.png" width="180" alt="4-Ton-Grün"><br>4-Ton-Grün</td>
+    <td align="center"><img src="docs/images/screens/shop-gross-fallblatt-jahr.png" width="180" alt="Fallblatt, Dieses Jahr"><br>Fallblatt, Dieses Jahr</td>
   </tr>
 </table>
 
@@ -74,7 +75,7 @@ The pictures come straight from the software (`SysopTV.exe --docs`, sample data)
 
 ## Status
 
-Firmware version 0.4.3, Windows program version 0.6.0, WordPress plugin "SysopTV for WooCommerce" version 0.1.0.
+Firmware version 0.4.3, Windows program version 0.7.0, WordPress plugin "SysopTV for WooCommerce" version 0.2.0.
 
 Tested on real hardware:
 
@@ -100,8 +101,8 @@ Not yet tested on real hardware, so there is no promise that these work:
 - "nicht aktiv" for a session without reset time (new in 0.4.1)
 - the overview page in picture mode and the fall back to the own design with fresh numbers (new in 0.4.2)
 - the valid picture: no parts on a screen the cube drew itself (new in 0.4.3)
-- the Windows program 0.6.0
-- the WordPress plugin "SysopTV for WooCommerce" 0.1.0
+- the Windows program 0.7.0
+- the WordPress plugin "SysopTV for WooCommerce" 0.2.0
 
 ## How it works
 
@@ -140,19 +141,21 @@ The Windows program SysopTV does the same as the PowerShell script, but runs in 
 
 It can feed several cubes. Each cube in the list gets one function:
 
-- **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
-- **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode). With firmware 0.4.2 or newer the program also sends the numbers, so the cube can show its own design with real values when the pictures stop.
-- **Shop als Bild** (shop as picture): orders and revenue of a Shopify or WooCommerce shop as a picture, as a big display of one number or in one of four detail views. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
+- **Claude Limits**: session and week in one of ten designs. The program draws the picture itself and sends it to the cube (picture mode, firmware 0.4.0 or newer). With firmware 0.4.2 or newer it also sends the numbers, so the cube can show its own design with real values when the pictures stop.
+- **Shopify**: orders and revenue of a Shopify shop, as a big display of one number or in one of four detail views. Needs firmware 0.4.0 or newer and the access to the shop, see "Shopify".
+- **WooCommerce**: the same for a WooCommerce shop with the plugin "SysopTV for WooCommerce", see "WooCommerce".
+
+A cube with older firmware (before 0.4.0) has no picture mode. For Claude Limits the program then sends only the numbers and the cube shows them in its own design, so only the six designs of the firmware can be chosen, and the page says "Firmware zu alt für alle Designs. Bitte die Firmware aktualisieren." Shopify and WooCommerce need the newer firmware.
 
 The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out. If nothing changes for 60 seconds, the program sends a sign of life (a tiny part, or the full picture for firmware before 0.4.3 or when the cube does not report a valid picture), so the cube never falls back to its own design while the program runs. Since firmware 0.4.3 the cube refuses parts while its screen is not a complete picture from the PC (answer 409), and the program then sends the full picture at once.
 
 The program remembers the time of the last query, a pause after error 429 and the last valid values in `%LOCALAPPDATA%\SysopTV\state.json` (never the login key). After a restart it waits until the interval has passed and the pause is over, and shows the stored values until then.
 
-Version 0.6.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+Version 0.7.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
 
 ### Designs as pictures
 
-For "Claude als Bild" the program draws the designs Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik with the same colours, fonts and positions as the firmware, including "nicht aktiv" and "ÜBRIG". Four more styles exist only as pictures:
+For "Claude Limits" the program draws the designs Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik with the same colours, fonts and positions as the firmware, including "nicht aktiv" and "ÜBRIG". Four more styles exist only as pictures:
 
 - **LED-Matrix**: only lit round dots on pure black, like a display board. The values sit in a big grid (one dot per pixel of the VGA font), labels and secondary values in a grid exactly half as big with a 5x7 dot font. On top SESSION, the session big, below WOCHE with the week, at the bottom the time until the reset. Below 20 % left the main value turns yellow.
 - **Hell** (light): a calm light layout with the font Inter, session and week each with a bar and the reset.
@@ -163,21 +166,21 @@ Per cube you choose the design, used or remaining, and optionally an automatic c
 
 The panel of the cube shows very dark colours much too bright and with a green tint, and medium grey on a light background almost disappears. The picture styles therefore use pure black for dark backgrounds, black text on light backgrounds (muted text at most dark grey) and keep at least 8 pixels from the edge.
 
-Values that are not fresh stay on the screen with a small "Stand HH:MM" (as of). An expired login shows "ANMELDUNG ABGELAUFEN" in the colours of the design. As long as there are no values at all, the program sends no picture, and after 3 minutes the cube shows its own display without PC. The same applies to the shop.
+Values that are not fresh stay on the screen with a small "Stand HH:MM" (as of). An expired login shows "ANMELDUNG ABGELAUFEN" in the colours of the design. As long as there are no values at all, the cube still gets a picture: a short notice in the colours and font of the chosen style, for example "Claude-Daten werden geladen", "Shopdaten werden geladen", "Zu viele Anfragen" or "Shop nicht erreichbar" with the time of the next try, "Schlüssel ungültig" or "Zugang prüfen". When the function or the view of a cube changes, the program sends a full picture of the new one at once.
 
-For "Shop als Bild" you first choose the view per cube.
+For Shopify and WooCommerce you first choose the view per cube.
 
 **Großanzeige** (big display) shows one period with one big number:
 
-- period: today, this week (since Monday 0:00) or this month (since the 1st), in the time zone of the shop, optionally changing every 30 or 60 seconds
+- period: today, this week (since Monday 0:00), this month (since the 1st) or this year (since 1 January), in the time zone of the shop, optionally changing every 30 or 60 seconds through all four
 - content: only orders, only revenue, or both (the count big, the revenue below at about half the height)
 - style: Kassenbon, DOS, Bernstein, LED-Matrix, Hell, Fallblatt or 4-Ton-Grün
 
-On top the shop name, then the period as a heading (HEUTE, DIESE WOCHE or the name of the month), the number as large as fits, and below it BESTELLUNGEN or UMSATZ. With both, the count comes first, directly below it BESTELLUNGEN, then the revenue. Amounts from 1000 on have no cents and a dot (3.022 €), below that a comma (184,50 €). A number that does not fit gets a smaller size, it is never cut.
+On top the shop name, then the period as a heading (HEUTE, DIESE WOCHE, the name of the month or the year, like 2026), the number as large as fits, and below it BESTELLUNGEN or UMSATZ. With both, the count comes first, directly below it BESTELLUNGEN, then the revenue. Amounts from 1000 on have no cents and a dot (3.022 €), below that a comma (184,50 €). A number that does not fit gets a smaller size, it is never cut, also six digit amounts like 123.456 €. If the year is missing (Shopify without `read_all_orders`, or a WooCommerce plugin older than 0.2.0), the year shows a notice instead; today, week and month keep working.
 
 **Details** are the four earlier designs, all with the 8x16 VGA font:
 
-- **Tabelle** (table, formerly DOS): table of today, yesterday, 7 days and the month with orders and revenue, the average, open orders and the last order.
+- **Tabelle** (table, formerly DOS): table of today, yesterday, 7 days, the month and the year with orders and revenue, the average, open orders and the last order.
 - **Bestellliste** (order list, formerly Shop Heute): today's orders, newest first, with time, order number, amount and a green tick for shipped or a yellow dot for open. If more orders come in than fit, the last line says how many more. Without orders it shows "Noch keine Bestellung heute" and when the last one came. At the bottom the number of orders and the revenue of today.
 - **Kassenbon Übersicht** (receipt overview, formerly Kassenbon): a receipt on light paper with today, yesterday, 7 days and month, the sum of today in double width, the open orders and a torn edge.
 - **Wochendiagramm** (week chart, formerly Shop Woche): the revenue of the last 7 days in amber, the change to the week before, one bar per day with today on the right, and the number of orders with the average.
@@ -208,8 +211,8 @@ At the top the window shows the state and the time of the last sending. On the l
 
 - **Übersicht** (overview): one line per cube with name, function, design, last sending and state in colour, below the Claude values and the shop values of today.
 - **Würfel** (cubes): the list of cubes on the left with "Suchen" (search for cubes in your local network, a click on a result adds it), "Von Hand hinzufügen" (add by hand) and "Entfernen" (remove). On the right the selected cube in two parts:
-  - **Verbindung und Funktion** (connection and function): address, function, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). For "Claude als Bild" also the design, used or remaining and the automatic change. For "Shop als Bild" the view, then either period, content and style of the big display, or the detail design and its change. The flip animation can be switched off where the style Fallblatt is used.
-  - **Einstellungen im Würfel** (settings in the cube): brightness, night mode and device name, for "Claude, Würfel zeichnet selbst" also the design, change and used or remaining of the cube. With an admin password they are loaded on their own when the window opens, when you choose a cube and when you open the page. "Auf dem Würfel speichern" stays locked until the values were loaded, and after saving the program reads them back. "Neu laden" loads them again. This needs firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser.
+  - **Verbindung und Funktion** (connection and function): address with "Verbindung testen" (test connection, shows firmware version and uptime below the list), the function Claude Limits, Shopify or WooCommerce, the optional API key (see "Optional API key") and the admin password of the cube. For Claude Limits also the design, used or remaining and the automatic change. For Shopify and WooCommerce the view, then either period, content and style of the big display, or the detail design and its change. If the access to the shop is not set up yet, a short hint below the function links to the page Shopify or WooCommerce; the cube then shows "Shop nicht eingetragen". The flip animation can be switched off where the style Fallblatt is used.
+  - **Einstellungen im Würfel** (settings in the cube): "Ersatzanzeige, wenn der PC nichts schickt" (fall back display) with used or remaining, brightness, night mode and device name. The cube shows its own design only when no pictures come from the program for a few minutes, for example when the PC is off. With an admin password the settings are loaded on their own when the window opens, when you choose a cube and when you open the page. "Auf dem Würfel speichern" stays locked until the values were loaded, and after saving the program reads them back. "Neu laden" loads them again. This needs firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser.
 
   Fields that do not count for the chosen function are hidden.
 - **Claude**: the interval in seconds (at least 120), the state of the login, the time of the last and the next query, an active pause after error 429 with the time left, and "Jetzt abfragen" (query now, at most once in 120 seconds).
@@ -221,38 +224,40 @@ Settings of the program are saved as soon as you leave a field, there is no save
 
 When no session is running, the status line, the tooltip, the overview and the page Claude say "Session nicht aktiv".
 
-The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords, the Shopify access and the WooCommerce key only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify or your WooCommerce website (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
+The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords, the Shopify access and the WooCommerce key only encrypted for your Windows user. Configurations of all earlier versions are taken over automatically, nothing is lost. A cube that drew Claude itself ("Claude, Würfel zeichnet selbst" up to 0.6.0) becomes Claude Limits and gets the design, used or remaining and the automatic change the cube showed, as soon as the program reaches it (until then DOS; firmware before 0.3.1 does not report its design, then it stays DOS). "Claude als Bild" becomes Claude Limits with the same design, "Shop als Bild" becomes Shopify or WooCommerce after its source, with all settings of the view. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify or your WooCommerce website (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
 
 If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC. Every 10 minutes the program checks again whether a process with `sysoptv-sender.ps1` in its command line runs. If so, the status line says "Altes PowerShell-Skript sendet parallel" in the warning colour and a notification appears once.
 
-For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes every picture design with sample data as PNG files, without network. `--once` also keeps to the 120 seconds after the last query and updates `state.json`.
+For a test from the command line, `SysopTV.exe --once` queries the limits once, sends the numbers to the first cube with Claude Limits and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes every picture design with sample data as PNG files, without network. `--once` also keeps to the 120 seconds after the last query and updates `state.json`. `--data-dir C:\Pfad\zu\ordner` (or the environment variable `SYSOPTV_DATA_DIR`) puts `config.json`, `state.json` and `app.log` into that folder instead of `%APPDATA%\SysopTV` and `%LOCALAPPDATA%\SysopTV`, for trials and tests that must not touch the real settings.
 
 ### WooCommerce
 
 For a WooCommerce shop the program needs the WordPress plugin "SysopTV for WooCommerce" (`wordpress/sysoptv-woocommerce/`, GPL-3.0-or-later). It adds one endpoint, `GET /wp-json/sysoptv/v1/stats`, protected by a key that you create in WordPress under WooCommerce, SysopTV. Only a hash of the key is stored on the site, the program keeps it encrypted.
 
-The plugin returns the same numbers the program reads from Shopify, so every shop view works with both sources: orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the orders still to ship, the last order and today's orders (at most 20, with number, time, amount and shipped or not). **No customer data**: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items.
+The plugin returns the same numbers the program reads from Shopify, so every shop view works with both sources: orders and revenue for today, yesterday, this week, this month, this year (since plugin 0.2.0), the last 7 days and each of the last 14 days, the orders still to ship, the last order and today's orders (at most 20, with number, time, amount and shipped or not). **No customer data**: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items.
 
 Counted are orders with the status processing, completed and on-hold, processing also as still to ship, completed as shipped. Revenue is the order total (gross, including shipping and taxes, after discounts, refunds not deducted), the same definition as for Shopify. The endpoint only answers over HTTPS, at most once every 30 seconds, locks an address after 10 wrong keys and caches its result for 60 seconds. It reads orders only through the WooCommerce API and works with the high performance order storage (HPOS).
 
-Per cube with "Shop als Bild" you choose the source, Shopify or WooCommerce. Installation, the fields of the answer and troubleshooting are in [docs/woocommerce-setup.md](docs/woocommerce-setup.md).
+For a cube with the shop choose the function WooCommerce on the page "Würfel". Installation, the fields of the answer and troubleshooting are in [docs/woocommerce-setup.md](docs/woocommerce-setup.md).
 
 ### Shopify
 
-The program reads the orders over the Shopify GraphQL Admin API, version `2026-10`. It needs the access scope `read_orders`. Shopify only returns the last 60 days without `read_all_orders`, which is enough for the current month and the last 14 days. Cancelled and test orders are not counted. The shop is asked every 5 minutes.
+The program reads the orders over the Shopify GraphQL Admin API, version `2026-10`. It needs the access scopes `read_orders` and `read_all_orders`. Without `read_all_orders` Shopify only returns the last 60 days: today, week and month still work, the year shows "Für das Jahr fehlt der Zugriff read_all_orders" on the page Shopify and on the cube. Cancelled and test orders are not counted. The shop is asked every 5 minutes.
+
+Each query reads only today and the last 30 days. For the year the program keeps orders and revenue per finished day in `state.json` and reads the whole year again once a day, in pages and within the rate limits of Shopify.
 
 Of each order the program reads only the order number (like #1043), the time, the amount and whether it is shipped. It reads **no customer data**: no names, no addresses, no e-mail addresses.
 
 From that it shows (in the time zone of the shop):
 
-- orders and revenue for today, yesterday, the last 7 days and the current month
+- orders and revenue for today, yesterday, the last 7 days, the current month and the year
 - today's orders, the latest 20 at most, with number, time, amount and shipped or not
 - revenue and orders per day for the last 14 days
 - the number of open orders that are not shipped yet, and time and amount of the last order
 
 Shopify no longer lets you create new custom apps in the shop admin. For your own shop the official way is an app in the Shopify Dev Dashboard with the client credentials grant. The steps with links to the official pages are in [docs/shopify-setup.md](docs/shopify-setup.md). Follow the official guides on shopify.dev, the menus there can change:
 
-- [Create apps using the Dev Dashboard](https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard): create the app, give its version the scope `read_orders`, release it and install it on your shop.
+- [Create apps using the Dev Dashboard](https://shopify.dev/docs/apps/build/dev-dashboard/create-apps-using-dev-dashboard): create the app, give its version the scopes `read_orders` and `read_all_orders`, release it and install it on your shop. An existing app gets `read_all_orders` with a new version that you release and then approve in your shop, see [docs/shopify-setup.md](docs/shopify-setup.md).
 - [Client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant): the app settings show a client ID and a client secret. Enter both in SysopTV. The program gets a token with them itself, which lasts 24 hours and is renewed when needed. This only works if the app and the shop belong to the same Shopify organization.
 
 If you still have an older custom app from the shop admin, its Admin API access token works as well. Enter it in the field "Admin-API-Zugriffstoken" instead of client ID and secret, see [Shopify: admin-created custom apps](https://shopify.dev/docs/apps/build/authentication-authorization/legacy/admin-custom-apps).

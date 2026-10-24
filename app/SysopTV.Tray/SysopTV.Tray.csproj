@@ -14,7 +14,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>SysopTV</AssemblyName>
     <RootNamespace>SysopTV.Tray</RootNamespace>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Product>SysopTV</Product>
     <Description>SysopTV: sendet die Claude-Nutzungslimits an den Würfel</Description>
     <Copyright>Copyright (C) 2026 Christoph Scheel, GPL-3.0</Copyright>

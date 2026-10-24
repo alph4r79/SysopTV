@@ -43,6 +43,8 @@ namespace SysopTV.Tray
         [DataMember(Name = "last7Days")] internal ShopPeriod Week = new ShopPeriod();          // last 7 days including today
         [DataMember(Name = "week")] internal ShopPeriod CalendarWeek = new ShopPeriod();      // since Monday 0:00, shop time
         [DataMember(Name = "month")] internal ShopPeriod Month = new ShopPeriod();            // current month
+        [DataMember(Name = "year")] internal ShopPeriod Year = new ShopPeriod();              // since 1 January
+        [DataMember(Name = "yearNote", EmitDefaultValue = false)] internal string YearNote;   // why there is no year value, null if fine
         [DataMember(Name = "days")] internal List<ShopPeriod> Days = new List<ShopPeriod>();         // last 14 days, oldest first, today last
         [DataMember(Name = "todayOrders")] internal List<ShopOrder> TodayOrders = new List<ShopOrder>();  // newest first, at most 20
         [DataMember(Name = "unshipped")] internal int Unshipped;
@@ -54,6 +56,7 @@ namespace SysopTV.Tray
         [DataMember(Name = "fetchedAt", EmitDefaultValue = false)] internal DateTime FetchedAt;           // PC time when the data was read
         internal string Plugin = "";             // version of the WooCommerce plugin
         internal string Error;                   // null if fine
+        internal string ErrorKind;               // ShopErrors: what kind of error, for the notice screen
         internal int RetryAfterSeconds;          // the source asked to wait, 0 if not
 
         [OnDeserializing]
@@ -64,6 +67,7 @@ namespace SysopTV.Tray
             Week = new ShopPeriod();
             CalendarWeek = new ShopPeriod();
             Month = new ShopPeriod();
+            Year = new ShopPeriod();
             Days = new List<ShopPeriod>();
             TodayOrders = new List<ShopOrder>();
             ShopName = "";
@@ -97,6 +101,7 @@ namespace SysopTV.Tray
             d.Week = new ShopPeriod { Orders = 31, Revenue = 1876.40m };
             d.CalendarWeek = new ShopPeriod { Orders = 23, Revenue = 1398.70m };
             d.Month = new ShopPeriod { Orders = 52, Revenue = 3022.15m };
+            d.Year = new ShopPeriod { Orders = 612, Revenue = 36418.70m };
 
             decimal[] amounts = { 49.90m, 34.90m, 59.80m, 39.90m, 24.95m, 89.00m, 19.90m, 44.50m, 64.90m, 29.90m, 54.00m, 39.00m, 74.90m, 22.50m };
             DateTime time = today.AddHours(Math.Max(1, Math.Min(now.Hour, 22))).AddMinutes(32);
@@ -128,6 +133,24 @@ namespace SysopTV.Tray
         }
     }
 
+    // Day values of finished days of one year, for the Shopify year. Stored in
+    // state.json, so only today and the last 30 days are read again each time.
+    [DataContract]
+    internal sealed class YearCache
+    {
+        [DataMember(Name = "shop")] internal string Shop = "";  // shop address, another shop starts again
+        [DataMember(Name = "year")] internal int Year;
+        [DataMember(Name = "fullDate", EmitDefaultValue = false)] internal DateTime FullDate;  // shop day of the last full reload
+        [DataMember(Name = "days")] internal List<ShopPeriod> Days = new List<ShopPeriod>();
+
+        [OnDeserializing]
+        private void OnDeserializing(StreamingContext context)
+        {
+            Days = new List<ShopPeriod>();
+            Shop = "";
+        }
+    }
+
     // Day, week and month in the time zone of the shop. The week starts on
     // Monday at 0:00, the month on the 1st at 0:00.
     internal static class ShopCalendar
@@ -148,6 +171,15 @@ namespace SysopTV.Tray
         {
             return new DateTime(shopTime.Year, shopTime.Month, 1);
         }
+    }
+
+    // Kinds of errors of a shop source, for the notice screen on the cube.
+    internal static class ShopErrors
+    {
+        internal const string Access = "access";    // key, token or secret wrong, scope missing, app not installed
+        internal const string TooMany = "toomany";  // the source asked to wait
+        internal const string Offline = "offline";  // not reachable or no answer
+        internal const string Other = "other";
     }
 
     internal static class ShopFormat

@@ -27,6 +27,8 @@ namespace SysopTV.Tray
         private static int Main(string[] args)
         {
             Net.Setup();
+            // --data-dir <folder>: config.json, state.json and app.log in that folder.
+            AppPaths.DataDirOption = ArgValue(args, "--data-dir");
 
             if (HasArg(args, "--once"))
             {

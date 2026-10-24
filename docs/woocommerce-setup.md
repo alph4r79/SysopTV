@@ -34,7 +34,7 @@ The page also shows the address of the endpoint, the time of the last successful
 1. Open the page "WooCommerce" in the SysopTV program.
 2. Enter the address of the website, for example `https://meinshop.de`, and the key. The key is stored only encrypted for your Windows user.
 3. Press "Shop testen". It shows the shop name, today's orders and the version of the plugin, or what went wrong.
-4. On the page "Würfel" choose "Shop als Bild" for a cube and "WooCommerce" as its source.
+4. On the page "Würfel" choose the function "WooCommerce" for a cube.
 
 The program asks the shop every 5 minutes. It keeps the last valid numbers in `%LOCALAPPDATA%\SysopTV\state.json` (without the key), so a cube shows them with "Stand HH:MM" right after a restart.
 
@@ -43,7 +43,8 @@ The program asks the shop every 5 minutes. It keeps the last valid numbers in `%
 `GET /wp-json/sysoptv/v1/stats` with the key in the header `X-SysopTV-Key` returns JSON with:
 
 - `plugin`, `shop`, `currency`, `timezone`, `utcOffsetMinutes`, `generatedAt`
-- `today`, `yesterday`, `week` (since Monday 0:00), `month` (since the 1st), `last7Days`: each with `orders` and `revenue`
+- `today`, `yesterday`, `week` (since Monday 0:00), `month` (since the 1st), `year` (since 1 January), `last7Days`: each with `orders` and `revenue`
+- `yearComplete`: `false` while the first count of the year is still running, then `true` (since plugin 0.2.0)
 - `days`: the last 14 days, oldest first, each with `date`, `orders` and `revenue`
 - `unshipped`: orders still to ship
 - `lastOrder`: `time` and `amount` of the last order, or `null`
@@ -58,7 +59,13 @@ How the plugin counts:
 - Orders with the status processing, completed and on-hold count. Processing also counts as still to ship (`unshipped`). Completed counts as shipped in the list of today.
 - Cancelled, refunded, failed, pending, draft (checkout-draft) and trashed orders do not count.
 - Revenue is the order total as WooCommerce shows it (`WC_Order::get_total()`): gross, including shipping and taxes, after discounts, refunds not deducted. That is the same definition as for Shopify in the program (`totalPriceSet`).
-- Days, weeks and months follow the time zone of the WordPress settings.
+- Days, weeks, months and the year follow the time zone of the WordPress settings.
+
+## The year
+
+Since plugin 0.2.0 the endpoint also returns the orders and revenue since 1 January. The program shows them as the period "Dieses Jahr" and in the row "Jahr" of the table. With an older plugin the program shows "Plugin aktualisieren" for the year; today, week and month keep working. To update, upload the new ZIP under Plugins, Add New, Upload Plugin and confirm replacing the installed version.
+
+So that a request never has to read all orders of the year, the plugin keeps the number of orders and the revenue per finished day in the option `sysoptv_wc_days` (not autoloaded). Each computation counts only today and the last 30 days again and takes the older days from that option. Once a day the plugin counts all days of the year again, so changes to older orders (for example a cancellation) are picked up the next day. That count runs in steps of at most 5 pages of 200 orders per request; until it is through, `yearComplete` is `false` and the program shows "Jahr wird noch berechnet". On 1 January the count starts again.
 
 ## Limits and security
 
@@ -76,4 +83,4 @@ How the plugin counts:
 - **"Zu viele Anfragen"**: the plugin allows one request every 30 seconds. "Shop testen" right after an automatic query has to wait a moment.
 - **"Der Schlüssel fehlt oder ist falsch"**: create a new key in WooCommerce, SysopTV and enter it again.
 
-To remove everything the plugin stored, deactivate and delete it in WordPress. `uninstall.php` removes its options and transients. Orders are never touched.
+To remove everything the plugin stored, deactivate and delete it in WordPress. `uninstall.php` removes its options (including the stored day values of the year) and transients. Orders are never touched.

@@ -20,6 +20,7 @@ namespace SysopTV.Tray
         private readonly Label testStatus = new Label { AutoSize = true, MaximumSize = new Size(420, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(6, 7, 0, 0) };
         private readonly Label lastQuery = Value();
         private readonly Label today = Value();
+        private readonly Label year = Value();
         protected readonly TextBox DisplayName = new TextBox { Width = 260 };
 
         protected ShopPage(PageContext ctx) : base(ctx)
@@ -63,6 +64,7 @@ namespace SysopTV.Tray
             AddRow(g, null, Row(test, testStatus));
             AddRow(g, "Letzte Abfrage", lastQuery);
             AddRow(g, "Heute", today);
+            AddRow(g, "Dieses Jahr", year);
             Controls.Add(Stack(Heading(heading), guideLabel, link, g, Note(note)));
             foreach (Control c in g.Controls)
             {
@@ -118,7 +120,26 @@ namespace SysopTV.Tray
                 return "Fehler: " + d.Error;
             }
             string name = string.IsNullOrEmpty(d.ShopName) ? "dem Shop" : d.ShopName;
-            return "Verbunden mit " + name + ": heute " + ShopFormat.Orders(d.Today.Orders) + ", " + version + ".";
+            string text = "Verbunden mit " + name + ": heute " + ShopFormat.Orders(d.Today.Orders) + ", " + version + ".";
+            return d.YearNote != null ? text + " " + YearText(d) + "." : text;
+        }
+
+        // The year or why it is missing.
+        internal static string YearText(ShopData d)
+        {
+            if (d.YearNote == ShopifyClient.MissingAllOrders)
+            {
+                return d.YearNote + ", Heute, Woche und Monat gehen weiter";
+            }
+            if (d.YearNote == WooClient.UpdatePlugin)
+            {
+                return "Für das Jahr das Plugin aktualisieren (0.2.0 oder neuer)";
+            }
+            if (d.YearNote != null)
+            {
+                return d.YearNote;
+            }
+            return ShopFormat.Orders(d.Year.Orders) + ", " + ShopFormat.Money(d.Year.Revenue);
         }
 
         private static string Today(ShopData d)
@@ -143,6 +164,7 @@ namespace SysopTV.Tray
                 {
                     "Heute: " + Today(d),
                     "Gestern: " + ShopFormat.Orders(d.Yesterday.Orders) + ", " + ShopFormat.Money(d.Yesterday.Revenue),
+                    "Jahr: " + YearText(d),
                     "Stand " + Time(d.FetchedAt) + (d.Error != null ? ", letzte Abfrage fehlgeschlagen: " + d.Error : "")
                 }.ToArray();
             }
@@ -153,6 +175,7 @@ namespace SysopTV.Tray
             ShopData d = Ctx.Service.ShopOf(Source);
             lastQuery.Text = Time(Ctx.Service.LastShopQueryOf(Source)) + (d != null && d.Error != null ? ", Fehler: " + d.Error : "");
             today.Text = d != null ? Today(d) : "keine Daten";
+            year.Text = d != null ? YearText(d) : "keine Daten";
         }
     }
 }

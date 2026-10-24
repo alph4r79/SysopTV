@@ -2,7 +2,8 @@
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
 // SysopTV.exe --preview <folder>: writes every picture design with sample
-// data as PNG, 240x240 and three times larger, plus two overview sheets
+// data as PNG, 240x240 and three times larger, the notice screens shown
+// without numbers, plus two overview sheets
 // (uebersicht-claude.png, uebersicht-shop.png) with all pictures side by side.
 //
 // SysopTV.exe --docs <folder>: the screens for README and GitHub with fixed
@@ -58,6 +59,9 @@ namespace SysopTV.Tray
             List<Canvas> flip = FlipAnimation.Frames(before, after);
             claude.Add(Write(flip[0], folder, "claude-fallblatt-klappen-1"));
             claude.Add(Write(flip[1], folder, "claude-fallblatt-klappen-2"));
+            claude.Add(Write(Notice.Render("dos", "CLAUDE", "Claude-Daten werden geladen", null, now.LocalDateTime), folder, "claude-dos-hinweis-laden"));
+            claude.Add(Write(Notice.Render("bernstein", "CLAUDE", "Keine Daten von Anthropic", "nächster Versuch " + now.LocalDateTime.AddMinutes(4).ToString("HH:mm"), now.LocalDateTime), folder, "claude-bernstein-hinweis-fehler"));
+            claude.Add(Write(Notice.Render("fallblatt", "CLAUDE", "Claude-Daten werden geladen", null, now.LocalDateTime), folder, "claude-fallblatt-hinweis-laden"));
 
             DateTime local = DateTime.Now;
             foreach (DesignInfo d in ShopDesigns.All)
@@ -70,7 +74,8 @@ namespace SysopTV.Tray
             {
                 new[] { "day", "both", "heute" },
                 new[] { "week", "orders", "woche" },
-                new[] { "month", "revenue", "monat" }
+                new[] { "month", "revenue", "monat" },
+                new[] { "year", "both", "jahr" }
             };
             foreach (DesignInfo style in ShopBig.Styles)
             {
@@ -87,6 +92,35 @@ namespace SysopTV.Tray
                     shop.Add(Write(ShopBig.Render(style.Id, big), folder, "shop-gross-" + style.Id + "-" + v[2]));
                 }
             }
+
+            ShopData six = ShopData.Sample(4);
+            six.Year = new ShopPeriod { Orders = 4321, Revenue = 123456.78m };
+            foreach (string id in new[] { "led", "fallblatt" })
+            {
+                var big = new ShopBigView { Data = six, ShopName = "Mein Retro-Shop", Now = local, Period = "year", Content = "revenue" };
+                shop.Add(Write(ShopBig.Render(id, big), folder, "shop-gross-" + id + "-jahr-sechsstellig"));
+            }
+            string retry = "nächster Versuch " + local.AddMinutes(5).ToString("HH:mm");
+            string[][] notices =
+            {
+                new[] { "bon", "Shopdaten werden geladen", null },
+                new[] { "dos", "Zu viele Anfragen", retry },
+                new[] { "bernstein", "Shop nicht erreichbar", retry },
+                new[] { "led", "Schlüssel ungültig", "im Programm prüfen" },
+                new[] { "hell", "Zugang prüfen", "im Programm prüfen" },
+                new[] { "fallblatt", "Shop nicht eingetragen", "im Programm einrichten" },
+                new[] { "gruen", "Shop meldet einen Fehler", retry }
+            };
+            foreach (string[] n in notices)
+            {
+                shop.Add(Write(Notice.Render(n[0], "SHOP", n[1], n[2], local), folder, "shop-gross-" + n[0] + "-hinweis"));
+            }
+            ShopData noScope = ShopData.Sample(4);
+            noScope.YearNote = ShopifyClient.MissingAllOrders;
+            shop.Add(Write(ShopBig.Render("bon", new ShopBigView { Data = noScope, ShopName = "Mein Retro-Shop", Now = local, Period = "year", Content = "both" }), folder, "shop-gross-bon-jahr-ohne-zugriff"));
+            ShopData oldPlugin = ShopData.Sample(4);
+            oldPlugin.YearNote = WooClient.UpdatePlugin;
+            shop.Add(Write(ShopBig.Render("dos", new ShopBigView { Data = oldPlugin, ShopName = "Mein Retro-Shop", Now = local, Period = "year", Content = "both", Source = ShopSources.WooCommerce }), folder, "shop-gross-dos-jahr-altes-plugin"));
 
             Sheet(claude, Path.Combine(folder, "uebersicht-claude.png"));
             Sheet(shop, Path.Combine(folder, "uebersicht-shop.png"));
@@ -125,6 +159,8 @@ namespace SysopTV.Tray
                 var big = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow, Period = "day", Content = "both" };
                 DocsPng(ShopBig.Render(style.Id, big), folder, "shop-gross-" + style.Id + "-heute");
             }
+            var year = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow, Period = "year", Content = "both" };
+            DocsPng(ShopBig.Render("fallblatt", year), folder, "shop-gross-fallblatt-jahr");
             string[][] details = { new[] { "dos", "tabelle" }, new[] { "heute", "bestellliste" }, new[] { "bon", "kassenbon" }, new[] { "woche", "wochendiagramm" } };
             foreach (string[] d in details)
             {

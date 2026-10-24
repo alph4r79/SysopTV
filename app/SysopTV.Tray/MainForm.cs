@@ -23,6 +23,7 @@ namespace SysopTV.Tray
         internal SenderService Service;
         internal Action<AppConfig> Saved;
         internal Form Owner;
+        internal Action<string> OpenPage;  // opens the page with this title
 
         internal void Save()
         {
@@ -191,6 +192,14 @@ namespace SysopTV.Tray
 
             menu.SelectedIndexChanged += (s, e) => ShowPage(menu.SelectedIndex);
             menu.SelectedIndex = 0;
+            ctx.OpenPage = title =>
+            {
+                int i = Array.FindIndex(pages, p => p.Title == title);
+                if (i >= 0)
+                {
+                    menu.SelectedIndex = i;
+                }
+            };
 
             ShowStatus();
             service.StatusChanged += OnStatusChanged;
@@ -216,6 +225,29 @@ namespace SysopTV.Tray
                 new WooCommercePage(ctx),
                 new ProgramPage(ctx)
             };
+        }
+
+        // The service took over the design of a cube that showed its own one
+        // ("usage" up to 0.6.0); the copy of the window gets it as well.
+        internal void Adopted(CubeEntry from)
+        {
+            CubeEntry c = ctx.Config.Cubes.Find(x => x.Address == from.Address && x.AdoptCubeDesign);
+            if (c == null)
+            {
+                return;
+            }
+            c.Design = from.Design;
+            c.ShowUsed = from.ShowUsed;
+            c.CycleSeconds = from.CycleSeconds;
+            c.AdoptCubeDesign = false;
+            foreach (Page p in pages)
+            {
+                var cubes = p as CubesPage;
+                if (cubes != null)
+                {
+                    cubes.Adopted(c);
+                }
+            }
         }
 
         private void DrawMenuItem(object sender, DrawItemEventArgs e)

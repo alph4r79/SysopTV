@@ -3,19 +3,21 @@
 //
 // Works in the background for all cubes:
 // - every interval (at least 120 s) one query at Anthropic, no matter how many
-//   cubes show Claude; cubes with "usage" get the numbers at once. Time of the
-//   last query, a 429 block and the last valid values are kept in state.json,
-//   so a restart neither asks too early nor shows nothing.
-// - every 5 minutes Shopify, if a cube shows the shop
-// - every second the pictures for cubes with "claude" or "shop" are drawn;
+//   cubes show Claude Limits; the numbers go to those cubes at once. Time of
+//   the last query, a 429 block and the last valid values are kept in
+//   state.json, so a restart neither asks too early nor shows nothing.
+// - every 5 minutes Shopify or WooCommerce, if a cube shows that shop
+// - every second the pictures for all cubes with picture mode are drawn;
 //   only the changed parts are sent (up to four), a full picture after a
-//   restart of the cube and at least every 10 minutes. Without any data no
-//   picture goes out.
+//   restart of the cube and at least every 10 minutes. Without any data the
+//   cube gets a notice. Cubes without picture mode (firmware before 0.4.0)
+//   get only the numbers and show them in their own design.
 
 using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text;
 using System.Threading;
 
 namespace SysopTV.Tray
@@ -69,6 +71,7 @@ namespace SysopTV.Tray
             internal string ShownDesign;
             internal string Firmware;  // version from /api/info, null until known
             internal bool? FrameValid; // the cube shows our whole picture (firmware 0.4.3 and newer), null if unknown
+            internal bool? CanFrame;   // picture mode (firmware 0.4.0 and newer), null until /api/info answered
             internal DateTime LastFrameSend = DateTime.MinValue;
         }
 
@@ -86,6 +89,7 @@ namespace SysopTV.Tray
             internal DateTime LastQuery = DateTime.MinValue;
             internal DateTime BlockedUntil = DateTime.MinValue;
             internal string LastError;
+            internal string LastKind;
             internal int Busy;
         }
 
@@ -106,6 +110,13 @@ namespace SysopTV.Tray
         private AppConfig config;
         private int roundBusy, frameBusy;
         private bool started;
+        private bool timersRunning;
+
+        // True once the timers run; the offline tests never start them.
+        private bool Started
+        {
+            get { return timersRunning; }
+        }
         private DateTime lastQuery = DateTime.MinValue;
         private DateTime nextRound = DateTime.MinValue;
         private UsageData lastSent;
@@ -118,6 +129,10 @@ namespace SysopTV.Tray
         internal Func<UsageData> Query;
 
         internal event Action StatusChanged;
+
+        // A cube taken over from "usage" got the design of the cube (address).
+        // The tray saves the settings then.
+        internal event Action<string> CubeAdopted;
 
         internal SenderStatus Status { get; private set; }
 
@@ -144,6 +159,7 @@ namespace SysopTV.Tray
                 policy.Seed(lastOk, lastOkTime.Value);
             }
             nextRound = lastQuery == DateTime.MinValue ? DateTime.Now : lastQuery.AddSeconds(config.Interval);
+            shopify.Cache = state.ShopifyYear ?? new YearCache();
             FetchShopFrom = (source, cfg) => source == ShopSources.WooCommerce ? woo.Fetch(cfg.Woo) : shopify.Fetch(cfg.Shop);
             foreach (KeyValuePair<string, ShopFeed> f in feeds)
             {
@@ -204,7 +220,7 @@ namespace SysopTV.Tray
             Log.Write("Start, Programm " + Program.Version + ", " + config.Cubes.Count + " Würfel, alle " + config.Interval + " Sekunden");
             foreach (CubeEntry c in config.Cubes)
             {
-                Log.Write("Würfel " + c.Title + ": " + CubeFunction.Label(c.Function));
+                Log.Write("Würfel " + c.Title + ": " + SourceText(c, c.PictureAt(DateTime.Now)));
             }
             if (nextRound > DateTime.Now)
             {
@@ -214,6 +230,7 @@ namespace SysopTV.Tray
             {
                 Log.Write("429-Pause aus dem letzten Lauf bis " + claude.BlockedUntil.ToString("HH:mm"));
             }
+            timersRunning = true;
             roundTimer.Change(TimeSpan.FromSeconds(2), Tick);
             frameTimer.Change(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(1));
         }
@@ -225,8 +242,21 @@ namespace SysopTV.Tray
             bool shopChanged = newConfig.Shop.Domain != config.Shop.Domain || newConfig.Shop.AccessTokenProtected != config.Shop.AccessTokenProtected ||
                                newConfig.Shop.ClientId != config.Shop.ClientId || newConfig.Shop.ClientSecretProtected != config.Shop.ClientSecretProtected;
             bool wooChanged = newConfig.Woo.Url != config.Woo.Url || newConfig.Woo.KeyProtected != config.Woo.KeyProtected;
+            bool redraw = false;
             lock (gate)
             {
+                foreach (CubeEntry c in newConfig.Cubes)
+                {
+                    CubeEntry before = config.Cubes.FirstOrDefault(o => o.Address == c.Address);
+                    CubeState st;
+                    // Another function or view: a full picture of the new one at once.
+                    if (before != null && states.TryGetValue(c.Address, out st) &&
+                        (before.Function != c.Function || before.ShopView != c.ShopView))
+                    {
+                        st.LastSent = null;
+                        redraw = true;
+                    }
+                }
                 config = newConfig;
                 foreach (string address in states.Keys.ToList())
                 {
@@ -235,6 +265,10 @@ namespace SysopTV.Tray
                         states.Remove(address);
                     }
                 }
+            }
+            if (redraw && Started)
+            {
+                ThreadPool.QueueUserWorkItem(_ => RunFrames());
             }
             if (intervalChanged)
             {
@@ -258,9 +292,9 @@ namespace SysopTV.Tray
             ThreadPool.QueueUserWorkItem(_ => RunRound(true));
         }
 
-        private bool AnyCube(params string[] functions)
+        private bool AnyCube(string function)
         {
-            return config.Cubes.Any(c => functions.Contains(c.Function));
+            return config.Cubes.Any(c => c.Function == function);
         }
 
         // Is a query at Anthropic due? Public for the tests.
@@ -291,7 +325,7 @@ namespace SysopTV.Tray
             }
         }
 
-        // One round: Anthropic once if due, then usage to every "usage" cube.
+        // One round: Anthropic once if due, then the numbers to the Claude cubes that take them.
         internal void RunRound(bool manual)
         {
             if (Interlocked.Exchange(ref roundBusy, 1) == 1)
@@ -301,7 +335,7 @@ namespace SysopTV.Tray
             try
             {
                 AppConfig cfg = config;
-                if (AnyCube(CubeFunction.Usage, CubeFunction.ClaudeFrame))
+                if (AnyCube(CubeFunction.Claude))
                 {
                     DateTime now = DateTime.Now;
                     UsageData data;
@@ -349,7 +383,7 @@ namespace SysopTV.Tray
                         lastSummary = summary;
                     }
                     string json = data.ToJson(DateTimeOffset.Now);
-                    foreach (CubeEntry c in cfg.Cubes.Where(c => c.Function == CubeFunction.Usage || NumbersWelcome(c)))
+                    foreach (CubeEntry c in cfg.Cubes.Where(NumbersWanted))
                     {
                         Remember(c, Cube.SendUsage(c.Address, json, c.ApiKey));
                     }
@@ -376,7 +410,7 @@ namespace SysopTV.Tray
             foreach (DesignInfo source in ShopSources.All)
             {
                 ShopFeed feed = feeds[source.Id];
-                bool shown = cfg.Cubes.Any(c => c.Function == CubeFunction.ShopFrame && c.ShopSource == source.Id);
+                bool shown = cfg.Cubes.Any(c => c.Function == source.Id);
                 if (shown && cfg.SourceConfigured(source.Id) && now - feed.LastQuery >= ShopInterval && now >= feed.BlockedUntil)
                 {
                     FetchShop(source.Id, cfg, now);
@@ -405,6 +439,7 @@ namespace SysopTV.Tray
                         Log.Write(label + ": " + d.Error);
                     }
                     feed.LastError = d.Error;
+                    feed.LastKind = d.ErrorKind;
                     if (d.RetryAfterSeconds > 0)
                     {
                         feed.BlockedUntil = now.AddSeconds(d.RetryAfterSeconds);
@@ -420,9 +455,14 @@ namespace SysopTV.Tray
                     Log.Write(label + ": wieder erreichbar");
                 }
                 feed.LastError = null;
+                feed.LastKind = null;
                 feed.Data = d;
                 feed.OkTime = now;
                 state.SetShop(source, d, now);
+                if (source == ShopSources.Shopify)
+                {
+                    state.ShopifyYear = shopify.Cache;
+                }
                 state.Save(statePath);
             }
             finally
@@ -456,12 +496,13 @@ namespace SysopTV.Tray
             }
         }
 
-        // "Claude als Bild" gets the numbers as well, so the cube can fall back to
-        // its own design. Only firmware 0.4.2 and newer keeps pictures in front of
-        // the numbers; older firmware would leave picture mode on every packet.
-        private bool NumbersWelcome(CubeEntry c)
+        // Claude cubes get the numbers: without picture mode (firmware before
+        // 0.4.0) they show them in their own design, with picture mode they keep
+        // them for the fall back. Only firmware 0.4.2 and newer keeps pictures in
+        // front of the numbers, 0.4.0 and 0.4.1 would leave picture mode.
+        private bool NumbersWanted(CubeEntry c)
         {
-            if (c.Function != CubeFunction.ClaudeFrame)
+            if (c.Function != CubeFunction.Claude)
             {
                 return false;
             }
@@ -470,23 +511,78 @@ namespace SysopTV.Tray
             {
                 st = StateFor(c);
             }
-            if (st.Firmware == null)
+            if (st.CanFrame == null)
             {
-                CubeInfo info = Cube.GetInfo(c.Address, TimeSpan.FromSeconds(3));
+                CubeInfo info = ReadInfo(c.Address);
                 if (info == null)
                 {
-                    return false;
+                    return true;  // not reachable: the send shows the error
                 }
-                st.Firmware = info.Version;
+                Learn(c, st, info);
             }
-            return CubeInfo.CompareVersion(st.Firmware, 0, 4, 2) >= 0;
+            return st.CanFrame != true || CubeInfo.CompareVersion(st.Firmware, 0, 4, 2) >= 0;
         }
 
-        // Name of the picture for the overview page of the cube.
+        // What /api/info says about a cube.
+        private void Learn(CubeEntry c, CubeState st, CubeInfo info)
+        {
+            st.Firmware = info.Version;
+            st.FrameValid = info.FrameValid;
+            st.CanFrame = info.CanFrame;
+            if (Adopt(c, info))
+            {
+                Log.Write("Würfel " + c.Title + ": Design vom Würfel übernommen, " + SourceText(c, c.DesignOrDefault));
+                Action<string> handler = CubeAdopted;
+                if (handler != null)
+                {
+                    handler(c.Address);
+                }
+            }
+        }
+
+        // A cube taken over from "usage" gets the design, used or remaining and
+        // the change the cube showed itself, once. Without a design in
+        // /api/info (firmware before 0.3.1) it stays DOS. Public for the tests.
+        internal static bool Adopt(CubeEntry c, CubeInfo info)
+        {
+            if (!c.AdoptCubeDesign || info == null)
+            {
+                return false;
+            }
+            DesignInfo d = ClaudeDesigns.All.Take(ClaudeDesigns.FirmwareCount).FirstOrDefault(x => x.Label == info.Design);
+            c.Design = d != null ? d.Id : ClaudeDesigns.Default;
+            if (info.ShowUsed.HasValue)
+            {
+                c.ShowUsed = info.ShowUsed.Value;
+            }
+            if (info.DesignCycle.HasValue && Array.IndexOf(CubeEntry.CycleChoices, info.DesignCycle.Value) >= 0)
+            {
+                c.CycleSeconds = info.DesignCycle.Value;
+            }
+            c.AdoptCubeDesign = false;
+            return true;
+        }
+
+        // At most this many bytes of the name reach the cube (firmware: SYSOPTV_FRAME_SOURCE_MAX).
+        private const int SourceMax = 32;
+
+        // Name of the picture for the overview page of the cube and the log, like
+        // "Claude Limits: DOS", "Shopify: Großanzeige Kassenbon" or
+        // "WooCommerce: Tabelle". Too long for the cube: without "Großanzeige",
+        // then cut after a whole word.
         internal static string SourceText(CubeEntry c, string picture)
         {
-            string label = c.PictureLabel(picture);
-            return c.Function == CubeFunction.ShopFrame ? "Shop: " + label : "Claude als Bild: " + label;
+            string head = CubeFunction.Label(c.Function) + ": ";
+            string text = head + c.PictureLabel(picture);
+            if (Encoding.UTF8.GetByteCount(text) > SourceMax && c.ShopBigView)
+            {
+                text = head + ShopBig.Label(ShopBig.Styles, picture);
+            }
+            while (Encoding.UTF8.GetByteCount(text) > SourceMax && text.LastIndexOf(' ') > head.Length)
+            {
+                text = text.Substring(0, text.LastIndexOf(' '));
+            }
+            return text;
         }
 
         private CubeState StateFor(CubeEntry c)
@@ -511,7 +607,7 @@ namespace SysopTV.Tray
             {
                 AppConfig cfg = config;
                 bool changed = false;
-                foreach (CubeEntry c in cfg.Cubes.Where(c => c.Function != CubeFunction.Usage))
+                foreach (CubeEntry c in cfg.Cubes)
                 {
                     changed |= FrameRound(c, DateTime.Now);
                 }
@@ -553,14 +649,37 @@ namespace SysopTV.Tray
             return r != null && !r.Ok && r.Status == 409 && (r.Message ?? "").Contains("full_frame_required");
         }
 
-        // One second for one picture cube: draw, decide what to send, send it.
-        // Returns true if something was sent.
+        // One second for one cube: draw, decide what to send, send it. Cubes
+        // without picture mode get only the numbers (RunRound). Returns true if
+        // something was sent or the state changed.
         internal bool FrameRound(CubeEntry c, DateTime now)
         {
             CubeState st;
             lock (gate)
             {
                 st = StateFor(c);
+            }
+            bool restarted = false;
+            if (now - st.LastInfo >= InfoEvery)
+            {
+                st.LastInfo = now;
+                CubeInfo info = ReadInfo(c.Address);
+                if (info != null)
+                {
+                    // Smaller uptime than before: the cube restarted and lost its picture.
+                    restarted = st.LastUptime >= 0 && info.Uptime < st.LastUptime;
+                    st.LastUptime = info.Uptime;
+                    Learn(c, st, info);
+                }
+                else if (st.CanFrame == null)
+                {
+                    Remember(c, new SendResult { Ok = false, Message = "keine Antwort von SysopTV" });
+                    return true;
+                }
+            }
+            if (st.CanFrame != true)
+            {
+                return false;
             }
             string design = c.PictureAt(now);
             Canvas canvas = Render(c, design, now);
@@ -569,23 +688,7 @@ namespace SysopTV.Tray
                 return false;
             }
             st.ShownDesign = design;
-            bool full = st.LastSent == null || now - st.LastFull >= FullFrameEvery;
-            if (now - st.LastInfo >= InfoEvery)
-            {
-                st.LastInfo = now;
-                CubeInfo info = ReadInfo(c.Address);
-                if (info != null)
-                {
-                    // Smaller uptime than before: the cube restarted and lost its picture.
-                    if (st.LastUptime >= 0 && info.Uptime < st.LastUptime)
-                    {
-                        full = true;
-                    }
-                    st.LastUptime = info.Uptime;
-                    st.Firmware = info.Version;
-                    st.FrameValid = info.FrameValid;
-                }
-            }
+            bool full = restarted || st.LastSent == null || now - st.LastFull >= FullFrameEvery;
             bool knowsValid = st.Firmware != null && CubeInfo.CompareVersion(st.Firmware, 0, 4, 3) >= 0;
             TimeSpan quiet = now - st.LastFrameSend;
             // Never a part on a screen the cube drew itself.
@@ -682,18 +785,18 @@ namespace SysopTV.Tray
         // The picture for one cube, or null without any data.
         internal Canvas Render(CubeEntry c, string design, DateTime now)
         {
-            if (c.Function == CubeFunction.ClaudeFrame)
+            if (c.Function == CubeFunction.Claude)
             {
                 bool login = lastSent != null && lastSent.State == "login";
                 if (lastOk == null && !login)
                 {
-                    return null;
+                    return ClaudeNotice(design, now);
                 }
                 string stamp = Stamp(lastOkTime, TimeSpan.FromSeconds(config.Interval + 60), now);
                 ViewModel v = UsageView.Build(lastOk, login, stamp, c.ShowUsed, new DateTimeOffset(now));
                 return ClaudeDesigns.Render(design, v);
             }
-            if (c.Function != CubeFunction.ShopFrame)
+            if (!c.IsShop)
             {
                 return null;
             }
@@ -701,7 +804,7 @@ namespace SysopTV.Tray
             ShopFeed feed = feeds[c.ShopSource];
             if (feed.Data == null)
             {
-                return null;
+                return ShopNotice(c, design, feed, now);
             }
             string name = config.SourceName(c.ShopSource);
             string shopStamp = Stamp(feed.OkTime, ShopInterval + ShopInterval + TimeSpan.FromMinutes(1), now);
@@ -714,12 +817,60 @@ namespace SysopTV.Tray
                     Now = now,
                     Stamp = shopStamp,
                     Period = c.PeriodAt(now),
-                    Content = c.BigContent
+                    Content = c.BigContent,
+                    Source = c.ShopSource
                 };
                 return ShopBig.Render(design, big);
             }
-            var details = new ShopView { Data = feed.Data, ShopName = name, Now = now, Stamp = shopStamp };
+            var details = new ShopView { Data = feed.Data, ShopName = name, Now = now, Stamp = shopStamp, Source = c.ShopSource };
             return ShopDesigns.Render(design, details);
+        }
+
+        // No valid Claude numbers at all: a notice instead of no picture, so
+        // the cube never falls back to its own design with old numbers.
+        private Canvas ClaudeNotice(string design, DateTime now)
+        {
+            if (lastSent == null)
+            {
+                return Notice.Render(design, "CLAUDE", "Claude-Daten werden geladen", null, now);
+            }
+            return Notice.Render(design, "CLAUDE", "Keine Daten von Anthropic", "nächster Versuch " + NextQuery.ToString("HH:mm"), now);
+        }
+
+        // No valid shop numbers at all: what is going on, in the style of the cube.
+        internal Canvas ShopNotice(CubeEntry c, string design, DateTime now)
+        {
+            return ShopNotice(c, design, feeds[c.ShopSource], now);
+        }
+
+        private Canvas ShopNotice(CubeEntry c, string design, ShopFeed feed, DateTime now)
+        {
+            string heading = ShopBig.Label(ShopSources.All, c.ShopSource).ToUpperInvariant();
+            DateTime next = feed.LastQuery.Add(ShopInterval);
+            if (feed.BlockedUntil > next)
+            {
+                next = feed.BlockedUntil;
+            }
+            string retry = "nächster Versuch " + next.ToString("HH:mm");
+            if (!config.SourceConfigured(c.ShopSource))
+            {
+                return Notice.Render(design, heading, "Shop nicht eingetragen", "im Programm einrichten", now);
+            }
+            if (feed.LastQuery == DateTime.MinValue || feed.LastError == null)
+            {
+                return Notice.Render(design, heading, "Shopdaten werden geladen", null, now);
+            }
+            switch (feed.LastKind)
+            {
+                case ShopErrors.TooMany:
+                    return Notice.Render(design, heading, "Zu viele Anfragen", retry, now);
+                case ShopErrors.Access:
+                    return Notice.Render(design, heading, c.ShopSource == ShopSources.WooCommerce ? "Schlüssel ungültig" : "Zugang prüfen", "im Programm prüfen", now);
+                case ShopErrors.Offline:
+                    return Notice.Render(design, heading, "Shop nicht erreichbar", retry, now);
+                default:
+                    return Notice.Render(design, heading, "Shop meldet einen Fehler", retry, now);
+            }
         }
 
         // Lines for the overview of the window.
@@ -732,11 +883,11 @@ namespace SysopTV.Tray
                 {
                     CubeState st;
                     states.TryGetValue(c.Address, out st);
-                    string function = CubeFunction.Label(c.Function) + (c.Function == CubeFunction.ShopFrame ? " (" + ShopBig.Label(ShopSources.All, c.ShopSource) + ")" : "");
-                    var row = new CubeRow { Title = c.Title, Function = function };
-                    if (c.Function == CubeFunction.Usage)
+                    var row = new CubeRow { Title = c.Title, Function = CubeFunction.Label(c.Function) };
+                    bool oldFirmware = st != null && st.CanFrame == false;
+                    if (oldFirmware)
                     {
-                        row.Design = "vom Würfel";
+                        row.Design = "Firmware zu alt";
                     }
                     else
                     {
@@ -833,11 +984,13 @@ namespace SysopTV.Tray
             }
             else if (feeds.Values.Any(f => f.Data != null))
             {
-                ShopData shop = feeds.Values.First(f => f.Data != null).Data;
+                KeyValuePair<string, ShopFeed> feed = feeds.First(f => f.Value.Data != null);
+                ShopData shop = feed.Value.Data;
+                string label = ShopBig.Label(ShopSources.All, feed.Key);
                 s.Kind = shop.Error != null ? StatusKind.Error : StatusKind.Ok;
                 s.Category = shop.Error != null ? "error" : "ok";
-                s.Line = "Shop: heute " + ShopFormat.Orders(shop.Today.Orders) + ", " + ShopFormat.Money(shop.Today.Revenue) + " (" + time + ")";
-                s.Tooltip = "SysopTV: Shop heute " + ShopFormat.Orders(shop.Today.Orders);
+                s.Line = label + ": heute " + ShopFormat.Orders(shop.Today.Orders) + ", " + ShopFormat.Money(shop.Today.Revenue) + " (" + time + ")";
+                s.Tooltip = "SysopTV: " + label + " heute " + ShopFormat.Orders(shop.Today.Orders);
                 s.Detail = shop.Error ?? "";
             }
             if (legacyRunning)

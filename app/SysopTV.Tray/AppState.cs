@@ -45,6 +45,7 @@ namespace SysopTV.Tray
         [DataMember(Name = "shopifyOkAt")] public long ShopifyOkAt;
         [DataMember(Name = "woocommerce", EmitDefaultValue = false)] public ShopData WooShop;
         [DataMember(Name = "woocommerceOkAt")] public long WooOkAt;
+        [DataMember(Name = "shopifyYear", EmitDefaultValue = false)] public YearCache ShopifyYear;  // day values for the year
 
         internal ShopData Shop(string source)
         {

@@ -1,7 +1,7 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// "Claude als Bild": the six designs of firmware 0.4.2 drawn on the PC with
+// "Claude Limits": the six designs of firmware 0.4.2 drawn on the PC with
 // the same colours, fonts, texts and positions (view_saeulen.cpp,
 // view_phosphor.cpp, view_dos.cpp, view_ansi.cpp, view_amber.cpp,
 // view_klassik.cpp and the login screen of view_common.cpp).

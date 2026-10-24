@@ -46,7 +46,7 @@ namespace SysopTV.Tray
             }
 
             AppConfig cfg = AppConfig.Load();
-            CubeEntry cube = cfg.Cubes.Find(c => c.Function == CubeFunction.Usage) ?? cfg.Cubes[0];
+            CubeEntry cube = cfg.Cubes.Find(c => c.Function == CubeFunction.Claude) ?? cfg.Cubes[0];
             string device = Program.ArgValue(args, "--device") ?? cube.Address;
 
             // Same rules as the background program: no query inside the interval

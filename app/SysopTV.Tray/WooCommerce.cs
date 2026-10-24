@@ -41,12 +41,12 @@ namespace SysopTV.Tray
             string site = NormalizeUrl(cfg.Url);
             if (site.Length == 0)
             {
-                return new ShopData { FetchedAt = DateTime.Now, Error = "Keine Adresse der Website eingetragen." };
+                return new ShopData { FetchedAt = DateTime.Now, Error = "Keine Adresse der Website eingetragen.", ErrorKind = ShopErrors.Access };
             }
             string key = cfg.Key;
             if (key.Length == 0)
             {
-                return new ShopData { FetchedAt = DateTime.Now, Error = "Kein Schlüssel eingetragen." };
+                return new ShopData { FetchedAt = DateTime.Now, Error = "Kein Schlüssel eingetragen.", ErrorKind = ShopErrors.Access };
             }
             try
             {
@@ -63,15 +63,15 @@ namespace SysopTV.Tray
                 {
                     return Parse(body, DateTime.Now);
                 }
-                return new ShopData { FetchedAt = DateTime.Now, Error = Explain(status, body, retry), RetryAfterSeconds = retry };
+                return new ShopData { FetchedAt = DateTime.Now, Error = Explain(status, body, retry), ErrorKind = KindOf(status), RetryAfterSeconds = retry };
             }
             catch (HttpRequestException ex)
             {
-                return new ShopData { FetchedAt = DateTime.Now, Error = "Website nicht erreichbar: " + ClaudeClient.Describe(ex) + ". Stimmt die Adresse?" };
+                return new ShopData { FetchedAt = DateTime.Now, Error = "Website nicht erreichbar: " + ClaudeClient.Describe(ex) + ". Stimmt die Adresse?", ErrorKind = ShopErrors.Offline };
             }
             catch (System.Threading.Tasks.TaskCanceledException)
             {
-                return new ShopData { FetchedAt = DateTime.Now, Error = "Die Website antwortet nicht (Zeitüberschreitung)." };
+                return new ShopData { FetchedAt = DateTime.Now, Error = "Die Website antwortet nicht (Zeitüberschreitung).", ErrorKind = ShopErrors.Offline };
             }
         }
 
@@ -116,6 +116,20 @@ namespace SysopTV.Tray
             {
                 return "";
             }
+        }
+
+        // Kind of an answer that is not 200, for the notice screen.
+        internal static string KindOf(int status)
+        {
+            if (status == 401 || status == 403)
+            {
+                return ShopErrors.Access;
+            }
+            if (status == 429)
+            {
+                return ShopErrors.TooMany;
+            }
+            return status >= 500 ? ShopErrors.Offline : ShopErrors.Other;
         }
 
         // Plain words for an answer that is not 200. Public for the offline tests.
@@ -167,7 +181,7 @@ namespace SysopTV.Tray
             }
             if (j == null || !j.ContainsKey("today") || !j.ContainsKey("days"))
             {
-                return new ShopData { FetchedAt = fetchedAt, Error = unreadable };
+                return new ShopData { FetchedAt = fetchedAt, Error = unreadable, ErrorKind = ShopErrors.Other };
             }
             try
             {
@@ -185,6 +199,21 @@ namespace SysopTV.Tray
                     Month = Period(j, "month"),
                     Unshipped = Convert.ToInt32(j["unshipped"] ?? 0, CultureInfo.InvariantCulture)
                 };
+                // The year came with plugin 0.2.0. Until the first full count of the
+                // year is through, the plugin sends yearComplete false.
+                object year;
+                if (j.TryGetValue("year", out year) && year is Dictionary<string, object> && !Older(d.Plugin, 0, 2))
+                {
+                    d.Year = PeriodOf((Dictionary<string, object>)year);
+                    if (false.Equals(j.ContainsKey("yearComplete") ? j["yearComplete"] : null))
+                    {
+                        d.YearNote = YearCounting;
+                    }
+                }
+                else
+                {
+                    d.YearNote = UpdatePlugin;
+                }
                 foreach (object o in (object[])j["days"])
                 {
                     var day = (Dictionary<string, object>)o;
@@ -216,8 +245,24 @@ namespace SysopTV.Tray
             }
             catch (Exception ex) when (ex is InvalidCastException || ex is FormatException || ex is KeyNotFoundException || ex is NullReferenceException || ex is OverflowException)
             {
-                return new ShopData { FetchedAt = fetchedAt, Error = unreadable };
+                return new ShopData { FetchedAt = fetchedAt, Error = unreadable, ErrorKind = ShopErrors.Other };
             }
+        }
+
+        internal const string UpdatePlugin = "Plugin aktualisieren";
+        internal const string YearCounting = "Jahr wird noch berechnet";
+
+        // True if the version is older than major.minor, also for an empty or odd version.
+        internal static bool Older(string version, int major, int minor)
+        {
+            string[] parts = (version ?? "").Split('.');
+            int a, b;
+            if (parts.Length < 2 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out a)
+                || !int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out b))
+            {
+                return true;
+            }
+            return a < major || (a == major && b < minor);
         }
 
         private static string Text(Dictionary<string, object> d, string key)

@@ -3,7 +3,7 @@
 # This file is distributed under the GPL-3.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: SysopTV for WooCommerce 0.1.0\n"
+"Project-Id-Version: SysopTV for WooCommerce 0.2.0\n"
 "Language: de_DE\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -101,8 +101,8 @@ msgstr "nicht aktiv: die Schnittstelle antwortet nur über HTTPS"
 msgid "Which data leaves the shop"
 msgstr "Welche Daten den Shop verlassen"
 
-msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
-msgstr "Shopname, Währung, Zeitzone, Anzahl der Bestellungen und Umsatz für heute, gestern, diese Woche, diesen Monat, die letzten 7 Tage und jeden der letzten 14 Tage, die Anzahl der zu versendenden Bestellungen, Zeit und Betrag der letzten Bestellung sowie für die heutigen Bestellungen (höchstens 20) Bestellnummer, Uhrzeit, Betrag und ob sie versendet ist."
+msgid "Shop name, currency, time zone, number of orders and revenue for today, yesterday, this week, this month, this year, the last 7 days and each of the last 14 days, the number of orders to ship, time and amount of the last order, and for today's orders (at most 20) the order number, time, amount and whether it is shipped."
+msgstr "Shopname, Währung, Zeitzone, Anzahl der Bestellungen und Umsatz für heute, gestern, diese Woche, diesen Monat, dieses Jahr, die letzten 7 Tage und jeden der letzten 14 Tage, die Anzahl der zu versendenden Bestellungen, Zeit und Betrag der letzten Bestellung sowie für die heutigen Bestellungen (höchstens 20) Bestellnummer, Uhrzeit, Betrag und ob sie versendet ist."
 
 msgid "No customer data: no names, addresses, e-mail addresses, phone numbers, IP addresses, notes or items."
 msgstr "Keine Kundendaten: keine Namen, Adressen, E-Mail-Adressen, Telefonnummern, IP-Adressen, Notizen oder Artikel."

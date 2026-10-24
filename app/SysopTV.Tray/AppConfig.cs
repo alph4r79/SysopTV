@@ -5,11 +5,15 @@
 // passwords, Shopify token and secret) are stored only encrypted with DPAPI
 // for the current Windows user, never as plain text.
 //
-// Version 0.1.0 had one cube (deviceAddress, apiKeyProtected). Such a file is
-// taken over as one cube with the function "usage".
-// Files of version 0.2.0 are read as they are; design, showUsed and
-// cycleSeconds of each cube then get their defaults. Shop cubes of versions
-// before 0.5.0 keep their design under the view "Details".
+// Each cube has one of three functions: "claude" (Claude Limits), "shopify"
+// or "woocommerce". Older files are taken over without losing anything:
+// - version 0.1.0 had one cube (deviceAddress, apiKeyProtected), it becomes
+//   a cube with "claude";
+// - "usage" (the cube drew itself) becomes "claude"; design, used or
+//   remaining and the change are taken from the cube on the first contact
+//   (adoptCubeDesign), until then DOS;
+// - "shop" becomes "shopify" or "woocommerce" after its shopSource;
+// - shop cubes of versions before 0.5.0 keep their design under "Details".
 
 using System;
 using System.Collections.Generic;
@@ -57,18 +61,30 @@ namespace SysopTV.Tray
 
     internal static class CubeFunction
     {
-        internal const string Usage = "usage";         // Claude, the cube draws itself
-        internal const string ClaudeFrame = "claude";  // Claude as picture
-        internal const string ShopFrame = "shop";      // Shop as picture
+        internal const string Claude = "claude";
+        internal const string Shopify = ShopSources.Shopify;
+        internal const string WooCommerce = ShopSources.WooCommerce;
+
+        // Only read from older files.
+        internal const string LegacyUsage = "usage";
+        internal const string LegacyShop = "shop";
+
+        internal static readonly DesignInfo[] All =
+        {
+            new DesignInfo(Claude, "Claude Limits"),
+            new DesignInfo(Shopify, "Shopify"),
+            new DesignInfo(WooCommerce, "WooCommerce")
+        };
 
         internal static string Label(string f)
         {
-            switch (f)
-            {
-                case ClaudeFrame: return "Claude als Bild";
-                case ShopFrame: return "Shop als Bild";
-                default: return "Claude, Würfel zeichnet selbst";
-            }
+            DesignInfo d = Array.Find(All, x => x.Id == f);
+            return d != null ? d.Label : All[0].Label;
+        }
+
+        internal static bool IsShop(string f)
+        {
+            return f == Shopify || f == WooCommerce;
         }
     }
 
@@ -77,17 +93,17 @@ namespace SysopTV.Tray
     {
         [DataMember(Name = "address")] public string Address = "";
         [DataMember(Name = "name")] public string Name = "";
-        [DataMember(Name = "function")] public string Function = CubeFunction.Usage;
+        [DataMember(Name = "function")] public string Function = CubeFunction.Claude;
         [DataMember(Name = "apiKeyProtected")] public string ApiKeyProtected = "";
         [DataMember(Name = "adminPasswordProtected")] public string AdminPasswordProtected = "";
 
-        // For the pictures only (functions "claude" and "shop"), chosen in the program.
-        // Older files have none of these, OnDeserializing sets the defaults.
+        // The picture, chosen in the program. Older files have none of these,
+        // OnDeserializing sets the defaults.
         [DataMember(Name = "design")] public string Design = "";
         [DataMember(Name = "showUsed")] public bool ShowUsed = true;
         [DataMember(Name = "cycleSeconds")] public int CycleSeconds;
 
-        // Shop as picture: view "big" (Großanzeige) or "details" (the four detail designs).
+        // Shop: view "big" (Großanzeige) or "details" (the four detail designs).
         [DataMember(Name = "shopView")] public string ShopView = ShopBig.ViewBig;
         [DataMember(Name = "bigPeriod")] public string BigPeriod = ShopBig.DefaultPeriod;
         [DataMember(Name = "bigContent")] public string BigContent = ShopBig.DefaultContent;
@@ -97,8 +113,12 @@ namespace SysopTV.Tray
         // Flip animation of the style Fallblatt, for Claude and the shop.
         [DataMember(Name = "animate")] public bool Animate = true;
 
-        // Shop as picture: where the numbers come from, "shopify" or "woocommerce".
-        [DataMember(Name = "shopSource")] public string ShopSource = ShopSources.Shopify;
+        // Up to 0.6.0 the source of a "shop" cube, only read.
+        [DataMember(Name = "shopSource", EmitDefaultValue = false)] public string LegacyShopSource;
+
+        // Taken over from "usage": design, used or remaining and change come
+        // from /api/info of the cube on the first contact.
+        [DataMember(Name = "adoptCubeDesign", EmitDefaultValue = false)] public bool AdoptCubeDesign;
 
         internal static readonly int[] CycleChoices = { 0, 30, 60 };
 
@@ -131,7 +151,19 @@ namespace SysopTV.Tray
             BigStyle = ShopBig.DefaultStyle;
             PeriodCycleSeconds = 0;
             Animate = true;
-            ShopSource = ShopSources.Shopify;
+            LegacyShopSource = null;
+            AdoptCubeDesign = false;
+        }
+
+        // Where the shop numbers come from, given by the function.
+        internal string ShopSource
+        {
+            get { return Function == CubeFunction.WooCommerce ? ShopSources.WooCommerce : ShopSources.Shopify; }
+        }
+
+        internal bool IsShop
+        {
+            get { return CubeFunction.IsShop(Function); }
         }
 
         // What the picture shows now: the style of the big display, or the design.
@@ -153,10 +185,10 @@ namespace SysopTV.Tray
 
         internal bool ShopBigView
         {
-            get { return Function == CubeFunction.ShopFrame && ShopView == ShopBig.ViewBig; }
+            get { return IsShop && ShopView == ShopBig.ViewBig; }
         }
 
-        // The period to show now: with change Heute, Woche, Monat one after the
+        // The period to show now: with change Heute, Woche, Monat, Jahr one after the
         // other, starting with the chosen one.
         internal string PeriodAt(DateTime now)
         {
@@ -170,17 +202,10 @@ namespace SysopTV.Tray
             return ShopBig.Periods[(int)((start + step) % ShopBig.Periods.Length)].Id;
         }
 
-        // The designs to choose from for the function of this cube, null for "usage".
+        // The designs to choose from for the function of this cube.
         internal DesignInfo[] Designs
         {
-            get
-            {
-                if (Function == CubeFunction.ClaudeFrame)
-                {
-                    return ClaudeDesigns.All;
-                }
-                return Function == CubeFunction.ShopFrame ? ShopDesigns.All : null;
-            }
+            get { return IsShop ? ShopDesigns.All : ClaudeDesigns.All; }
         }
 
         // The chosen design, or the default if it does not fit the function.
@@ -188,11 +213,11 @@ namespace SysopTV.Tray
         {
             get
             {
-                if (Function == CubeFunction.ClaudeFrame)
+                if (IsShop)
                 {
-                    return ClaudeDesigns.Known(Design) ? Design : ClaudeDesigns.Default;
+                    return ShopDesigns.Known(Design) ? Design : ShopDesigns.Default;
                 }
-                return ShopDesigns.Known(Design) ? Design : ShopDesigns.Default;
+                return ClaudeDesigns.Known(Design) ? Design : ClaudeDesigns.Default;
             }
         }
 
@@ -202,7 +227,7 @@ namespace SysopTV.Tray
         {
             DesignInfo[] list = Designs;
             string chosen = DesignOrDefault;
-            if (list == null || CycleSeconds <= 0)
+            if (CycleSeconds <= 0)
             {
                 return chosen;
             }
@@ -232,10 +257,6 @@ namespace SysopTV.Tray
             {
                 BigStyle = ShopBig.DefaultStyle;
             }
-            if (!ShopBig.Known(ShopSources.All, ShopSource))
-            {
-                ShopSource = ShopSources.Shopify;
-            }
             if (Array.IndexOf(CycleChoices, PeriodCycleSeconds) < 0)
             {
                 PeriodCycleSeconds = 0;
@@ -246,10 +267,23 @@ namespace SysopTV.Tray
             }
             Address = (Address ?? "").Trim();
             Name = Name ?? "";
-            if (Function != CubeFunction.ClaudeFrame && Function != CubeFunction.ShopFrame)
+            switch (Function)
             {
-                Function = CubeFunction.Usage;
+                case CubeFunction.Claude:
+                case CubeFunction.Shopify:
+                case CubeFunction.WooCommerce:
+                    break;
+                case CubeFunction.LegacyShop:
+                    Function = LegacyShopSource == ShopSources.WooCommerce ? CubeFunction.WooCommerce : CubeFunction.Shopify;
+                    break;
+                default:
+                    // "usage" or nothing: Claude Limits with the design of the cube, DOS until it is known.
+                    Function = CubeFunction.Claude;
+                    Design = ClaudeDesigns.Default;
+                    AdoptCubeDesign = true;
+                    break;
             }
+            LegacyShopSource = null;
             ApiKeyProtected = ApiKeyProtected ?? "";
             AdminPasswordProtected = AdminPasswordProtected ?? "";
         }
@@ -260,7 +294,7 @@ namespace SysopTV.Tray
         }
     }
 
-    // The shop sources for "Shop als Bild".
+    // The shop sources, the same ids as the shop functions.
     internal static class ShopSources
     {
         internal const string Shopify = "shopify";
@@ -456,7 +490,9 @@ namespace SysopTV.Tray
                 cfg.Cubes.Add(new CubeEntry
                 {
                     Address = cfg.LegacyAddress.Trim(),
-                    Function = CubeFunction.Usage,
+                    Function = CubeFunction.Claude,
+                    Design = ClaudeDesigns.Default,
+                    AdoptCubeDesign = true,
                     ApiKeyProtected = cfg.LegacyApiKey ?? ""
                 });
                 Log.Write("Einstellungen von Version 0.1.0 übernommen: ein Würfel " + cfg.LegacyAddress.Trim());

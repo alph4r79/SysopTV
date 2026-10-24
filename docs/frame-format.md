@@ -7,7 +7,7 @@ Firmware 0.4.0 and newer can show pictures that a PC draws. The PC sends a pictu
 - Method and path: `POST /api/frame`
 - Body: `multipart/form-data` with exactly one file part (any field name, for example `frame`). The file content is the SYF1 data described below. The web server of the cube can only stream file uploads, which is why the picture comes as a file.
 - Header `X-SysopTV-Key`: needed only if an API key is set on the cube, the same as for `/api/usage`.
-- Header `X-SysopTV-Source` (optional, since firmware 0.4.2): a short name of what the picture shows, for example `Claude als Bild: DOS` or `Shop: Kassenbon`. Non-ASCII characters are sent percent encoded as UTF-8 (`%C3%A4` for ä), the cube decodes them. At most 32 bytes are kept. The overview page of the cube shows it as "Bildmodus: <name>, letztes Bild vor 12 s", and `/api/info` returns it as `frameSource` together with `frameAgeSeconds` (both `null` before the first picture).
+- Header `X-SysopTV-Source` (optional, since firmware 0.4.2): a short name of what the picture shows, for example `Claude Limits: DOS`, `Shopify: Großanzeige Kassenbon` or `WooCommerce: Tabelle`. Non-ASCII characters are sent percent encoded as UTF-8 (`%C3%A4` for ä), the cube decodes them. At most 32 bytes are kept. The overview page of the cube shows it as "Bildmodus: <name>, letztes Bild vor 12 s", and `/api/info` returns it as `frameSource` together with `frameAgeSeconds` (both `null` before the first picture).
 - Answers: `200 {"ok":true}`, `400 {"ok":false,"error":"..."}` for broken data, `401` for a missing or wrong key, `409 {"ok":false,"error":"full_frame_required"}` for a part while the screen is not a complete picture (since firmware 0.4.3, see "Valid picture"), `503` in rescue mode.
 
 ## Data

@@ -1,7 +1,8 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// Shop big display: one period (today, this week since Monday, this month)
+// Shop big display: one period (today, this week since Monday, this month,
+// this year)
 // with one big number, in seven styles. The same layout for all styles:
 // shop name small on top, the period as a heading, the main number as large
 // as fits, below it the label. With "both" the count comes first, directly
@@ -20,8 +21,9 @@ namespace SysopTV.Tray
         internal string ShopName;
         internal DateTime Now;
         internal string Stamp;    // "Stand HH:MM" if the numbers are not fresh, otherwise null
-        internal string Period;   // day, week, month
+        internal string Period;   // day, week, month, year
         internal string Content;  // both, orders, revenue
+        internal string Source = ShopSources.Shopify;
     }
 
     internal static class ShopBig
@@ -39,7 +41,8 @@ namespace SysopTV.Tray
         {
             new DesignInfo("day", "Heute"),
             new DesignInfo("week", "Diese Woche"),
-            new DesignInfo("month", "Dieser Monat")
+            new DesignInfo("month", "Dieser Monat"),
+            new DesignInfo("year", "Dieses Jahr")
         };
 
         internal const string DefaultContent = "both";
@@ -84,17 +87,19 @@ namespace SysopTV.Tray
             {
                 case "week": return d.CalendarWeek;
                 case "month": return d.Month;
+                case "year": return d.Year;
                 default: return d.Today;
             }
         }
 
-        // HEUTE, DIESE WOCHE or the name of the month, OKTOBER.
+        // HEUTE, DIESE WOCHE, the name of the month (OKTOBER) or the year (2026).
         internal static string Title(string period, DateTime shopNow)
         {
             switch (period)
             {
                 case "week": return "DIESE WOCHE";
                 case "month": return German.DateTimeFormat.GetMonthName(shopNow.Month).ToUpper(German);
+                case "year": return shopNow.Year.ToString(CultureInfo.InvariantCulture);
                 default: return "HEUTE";
             }
         }
@@ -184,6 +189,11 @@ namespace SysopTV.Tray
         internal static Canvas Render(string style, ShopBigView v)
         {
             Texts t = Make(v);
+            if (v.Period == "year" && v.Data.YearNote != null)
+            {
+                // No year value: missing Shopify scope, old plugin or the first count still running.
+                return Notice.Render(style, t.Title, v.Data.YearNote, YearDetail(v.Data.YearNote), v.Now);
+            }
             switch (style)
             {
                 case "dos": return Dos(v, t);
@@ -194,6 +204,19 @@ namespace SysopTV.Tray
                 case "gruen": return Gruen(v, t);
                 default: return Receipt(v, t);
             }
+        }
+
+        internal static string YearDetail(string note)
+        {
+            if (note == ShopifyClient.MissingAllOrders)
+            {
+                return "Heute, Woche und Monat gehen weiter";
+            }
+            if (note == WooClient.UpdatePlugin)
+            {
+                return "auf Version 0.2.0 oder neuer";
+            }
+            return "bitte etwas Geduld";
         }
 
         private static string Clock(ShopBigView v)
@@ -269,7 +292,7 @@ namespace SysopTV.Tray
                 c.Text(t.Extra, 120, b.ExtraY, Align.Center, 1, DosGray, DosBack);
             }
             c.FillRect(0, 214, 240, 26, DosBar);
-            c.Text("Shopify", Margin, 216, Align.Left, 1, 0, DosBar);
+            c.Text(Label(ShopSources.All, v.Source), Margin, 216, Align.Left, 1, 0, DosBar);
             c.Text(v.Stamp ?? "Stand vor " + ShopFormat.Age(v.Now - v.Data.FetchedAt), 240 - Margin, 216, Align.Right, 1, 0, DosBar);
             return c;
         }
@@ -305,12 +328,12 @@ namespace SysopTV.Tray
 
         // Small heading, the main number big, label and secondary value small,
         // all rows spread evenly. Values that do not fit the 6 px grid take
-        // 4 px, the labels then use the same grid.
+        // 4 px, six digit amounts 3 px, the labels then use the same grid.
         private static Canvas LedStyle(ShopBigView v, Texts t)
         {
             var c = new Canvas();
-            int big = Led.BigWidth(t.Main, 6) <= 224 ? 6 : 4;
-            int small = big == 6 ? 3 : 4;
+            int big = Led.BigWidth(t.Main, 6) <= 224 ? 6 : Led.BigWidth(t.Main, 4) <= 224 ? 4 : 3;
+            int small = big == 4 ? 4 : 3;
             string top = v.Stamp ?? t.Title;
             var heights = new System.Collections.Generic.List<int> { Led.TinyHeight(small), Led.BigHeight(t.Main, big), Led.TinyHeight(small) };
             var pitches = new System.Collections.Generic.List<int> { small, big, small };
