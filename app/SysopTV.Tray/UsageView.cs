@@ -38,6 +38,7 @@ namespace SysopTV.Tray
         internal ViewColumn Week;
         internal bool ShowUsed;
         internal string Stamp;  // "Stand HH:MM" if the values are not fresh, otherwise null
+        internal bool BlinkOff; // odd second: blinking warnings are off (style 4-Ton-Grün)
     }
 
     internal static class UsageView
@@ -125,7 +126,8 @@ namespace SysopTV.Tray
                 ShowUsed = showUsed,
                 Clock = now.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture),
                 Screen = login ? ViewScreen.Login : ViewScreen.Limits,
-                Stamp = stamp
+                Stamp = stamp,
+                BlinkOff = now.ToUnixTimeSeconds() % 2 == 1
             };
             v.Session = Column(values != null ? values.Session : null, true, showUsed, now);
             v.Week = Column(values != null ? values.Week : null, false, showUsed, now);

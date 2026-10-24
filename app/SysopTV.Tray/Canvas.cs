@@ -6,7 +6,9 @@
 // (view_common.cpp), text in the TFT_eSPI fonts like drawString() there.
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
@@ -33,6 +35,7 @@ namespace SysopTV.Tray
         {
             var c = new Canvas();
             Array.Copy(Pixels, c.Pixels, Pixels.Length);
+            c.Cards.AddRange(Cards);
             return c;
         }
 
@@ -264,6 +267,124 @@ namespace SysopTV.Tray
                 }
                 x += cw * size;
             }
+        }
+
+        // Flip cards of the style Fallblatt, for the flip animation (FlipAnimation).
+        internal readonly List<Rectangle> Cards = new List<Rectangle>();
+
+        private static int Expand(ushort p)
+        {
+            int r = (p >> 11) & 0x1F, g = (p >> 5) & 0x3F, b = p & 0x1F;
+            return unchecked((int)0xFF000000) | ((r * 255 / 31) << 16) | ((g * 255 / 63) << 8) | (b * 255 / 31);
+        }
+
+        // Fills an outline with anti aliasing: the area is copied out, drawn with
+        // GDI+ and written back in RGB565.
+        internal void FillPath(GraphicsPath path, ushort colour)
+        {
+            RectangleF bf = path.GetBounds();
+            var area = Rectangle.FromLTRB((int)Math.Floor(bf.Left) - 1, (int)Math.Floor(bf.Top) - 1,
+                                          (int)Math.Ceiling(bf.Right) + 1, (int)Math.Ceiling(bf.Bottom) + 1);
+            area.Intersect(new Rectangle(clipX0, clipY0, clipX1 - clipX0, clipY1 - clipY0));
+            if (area.Width <= 0 || area.Height <= 0)
+            {
+                return;
+            }
+            using (var bmp = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb))
+            {
+                BitmapData data = bmp.LockBits(new Rectangle(0, 0, area.Width, area.Height), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+                var row = new int[area.Width];
+                for (int y = 0; y < area.Height; y++)
+                {
+                    for (int x = 0; x < area.Width; x++)
+                    {
+                        row[x] = Expand(Pixels[(area.Y + y) * Size + area.X + x]);
+                    }
+                    Marshal.Copy(row, 0, data.Scan0 + y * data.Stride, area.Width);
+                }
+                bmp.UnlockBits(data);
+                using (Graphics g = Graphics.FromImage(bmp))
+                using (var brush = new SolidBrush(Color.FromArgb(Expand(colour))))
+                {
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.TranslateTransform(-area.X, -area.Y);
+                    g.FillPath(brush, path);
+                }
+                data = bmp.LockBits(new Rectangle(0, 0, area.Width, area.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                for (int y = 0; y < area.Height; y++)
+                {
+                    Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, area.Width);
+                    for (int x = 0; x < area.Width; x++)
+                    {
+                        int v = row[x];
+                        Pixels[(area.Y + y) * Size + area.X + x] = Rgb((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF);
+                    }
+                }
+                bmp.UnlockBits(data);
+            }
+        }
+
+        // Rectangle with rounded corners, anti aliased.
+        internal void FillRoundRect(int x, int y, int w, int h, int radius, ushort colour)
+        {
+            using (var path = new GraphicsPath())
+            {
+                int d = radius * 2;
+                path.AddArc(x, y, d, d, 180, 90);
+                path.AddArc(x + w - d, y, d, d, 270, 90);
+                path.AddArc(x + w - d, y + h - d, d, d, 0, 90);
+                path.AddArc(x, y + h - d, d, d, 90, 90);
+                path.CloseFigure();
+                FillPath(path, colour);
+            }
+        }
+
+        // A round dot of the given diameter with its top left corner at x, y,
+        // drawn pixel by pixel so it looks the same at every position.
+        internal void Dot(int x, int y, int diameter, ushort colour)
+        {
+            if (diameter <= 2)
+            {
+                FillRect(x, y, diameter, diameter, colour);
+                return;
+            }
+            double r = diameter / 2.0;
+            for (int dy = 0; dy < diameter; dy++)
+            {
+                for (int dx = 0; dx < diameter; dx++)
+                {
+                    double cx = dx + 0.5 - r, cy = dy + 0.5 - r;
+                    if (cx * cx + cy * cy <= r * r + 0.3)
+                    {
+                        FillRect(x + dx, y + dy, 1, 1, colour);
+                    }
+                }
+            }
+        }
+
+        // VGA text with separate horizontal and vertical scale, like the double
+        // height print of a receipt printer.
+        internal void TextScaled(string s, int x, int y, Align align, int sx, int sy, ushort fg, ushort bg)
+        {
+            int left = Left(x, s.Length * 8 * sx, align);
+            for (int g = 0; g < s.Length; g++)
+            {
+                byte[] glyph = VgaFont.Glyphs[Glyph(s[g])];
+                for (int row = 0; row < 16; row++)
+                {
+                    for (int b = 0; b < 8; b++)
+                    {
+                        FillRect(left + (g * 8 + b) * sx, y + row * sy, sx, sy, (glyph[row] & (0x80 >> b)) != 0 ? fg : bg);
+                    }
+                }
+            }
+        }
+
+        // Glyph bitmap of one character, for the LED matrix.
+        internal static byte[] GlyphRows(char c)
+        {
+            return VgaFont.Glyphs[Glyph(c)];
         }
 
         internal Bitmap ToBitmap(int scale)

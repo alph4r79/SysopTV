@@ -1,7 +1,7 @@
 // SysopTV, Copyright (C) 2026 Christoph Scheel
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
-// "Claude als Bild": the six designs of firmware 0.4.1 drawn on the PC with
+// "Claude als Bild": the six designs of firmware 0.4.2 drawn on the PC with
 // the same colours, fonts, texts and positions (view_saeulen.cpp,
 // view_phosphor.cpp, view_dos.cpp, view_ansi.cpp, view_amber.cpp,
 // view_klassik.cpp and the login screen of view_common.cpp).
@@ -32,7 +32,7 @@ namespace SysopTV.Tray
         }
     }
 
-    internal static class ClaudeDesigns
+    internal static partial class ClaudeDesigns
     {
         // Same order and names as the designs of the firmware.
         internal static readonly DesignInfo[] All =
@@ -42,10 +42,17 @@ namespace SysopTV.Tray
             new DesignInfo("dos", "DOS"),
             new DesignInfo("ansi", "ANSI"),
             new DesignInfo("bernstein", "Bernstein"),
-            new DesignInfo("klassik", "Klassik")
+            new DesignInfo("klassik", "Klassik"),
+            new DesignInfo("led", "LED-Matrix"),
+            new DesignInfo("hell", "Hell"),
+            new DesignInfo("fallblatt", "Fallblatt"),
+            new DesignInfo("gruen", "4-Ton-Grün")
         };
 
         internal const string Default = "dos";
+
+        // The first six are the designs of the firmware, in its order.
+        internal const int FirmwareCount = 6;
 
         private static readonly Dictionary<string, Func<ViewModel, Canvas>> Renderers = new Dictionary<string, Func<ViewModel, Canvas>>
         {
@@ -54,7 +61,11 @@ namespace SysopTV.Tray
             { "dos", Dos },
             { "ansi", Ansi },
             { "bernstein", Bernstein },
-            { "klassik", Klassik }
+            { "klassik", Klassik },
+            { "led", LedMatrix },
+            { "hell", Hell },
+            { "fallblatt", Fallblatt },
+            { "gruen", Green }
         };
 
         internal static bool Known(string id)

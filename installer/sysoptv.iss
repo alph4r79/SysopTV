@@ -51,6 +51,8 @@ Name: "autostart"; Description: "Mit Windows starten"; GroupDescription: "Weiter
 Source: "{#BinDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#BinDir}\{#AppExe}.config"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\app\assets\fonts\OFL-Inter.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\app\assets\fonts\OFL-JetBrainsMono.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

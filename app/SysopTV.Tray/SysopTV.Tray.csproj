@@ -14,7 +14,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>SysopTV</AssemblyName>
     <RootNamespace>SysopTV.Tray</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.2</Version>
     <Product>SysopTV</Product>
     <Description>SysopTV: sendet die Claude-Nutzungslimits an den Würfel</Description>
     <Copyright>Copyright (C) 2026 Christoph Scheel, GPL-3.0</Copyright>
@@ -38,6 +38,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\assets\sysoptv.ico" Link="sysoptv.ico" LogicalName="SysopTV.Tray.sysoptv.ico" />
+    <!-- Fonts for the styles Hell and Fallblatt, SIL Open Font License 1.1, see app/assets/fonts. -->
+    <EmbeddedResource Include="..\assets\fonts\Inter-Regular.ttf" Link="fonts\Inter-Regular.ttf" LogicalName="SysopTV.Tray.fonts.Inter-Regular.ttf" />
+    <EmbeddedResource Include="..\assets\fonts\Inter-Bold.ttf" Link="fonts\Inter-Bold.ttf" LogicalName="SysopTV.Tray.fonts.Inter-Bold.ttf" />
+    <EmbeddedResource Include="..\assets\fonts\JetBrainsMono-Bold.ttf" Link="fonts\JetBrainsMono-Bold.ttf" LogicalName="SysopTV.Tray.fonts.JetBrainsMono-Bold.ttf" />
   </ItemGroup>
 
 </Project>

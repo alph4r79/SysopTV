@@ -48,8 +48,9 @@ namespace SysopTV.Tray
             int count = 0;
             try
             {
+                // Any process with the script in its command line, not only powershell.exe.
                 using (var searcher = new ManagementObjectSearcher(
-                    "SELECT CommandLine FROM Win32_Process WHERE Name='powershell.exe' OR Name='pwsh.exe'"))
+                    "SELECT CommandLine FROM Win32_Process WHERE CommandLine LIKE '%" + ScriptName + "%'"))
                 {
                     foreach (ManagementBaseObject p in searcher.Get())
                     {

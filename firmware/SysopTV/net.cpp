@@ -996,6 +996,7 @@ static void handleInfo() {
   doc["design"] = designGet(designActive()).name;
   doc["designCycle"] = settingsGet().cycleSeconds;
   doc["designText"] = designText();
+  doc["frameValid"] = frameValid();
   if (frameSeen()) {
     doc["frameSource"] = frameSource();
     doc["frameAgeSeconds"] = frameAgeSeconds();
@@ -1202,6 +1203,7 @@ static void handleFrameUpload() {
       frameFailure = frameError();
     }
   } else if (up.status == UPLOAD_FILE_ABORTED) {
+    frameAbort();
     frameFailure = "Upload abgebrochen";
   }
 }
@@ -1215,6 +1217,9 @@ static void handleFrameDone() {
     sendJsonError(401, "Schluessel fehlt oder falsch");
   } else if (!seen) {
     sendJsonError(400, "Bild als multipart/form-data erwartet");
+  } else if (frameFailure == FRAME_FULL_REQUIRED) {
+    // The screen is not a complete picture from the PC: only a full picture helps.
+    sendJsonError(409, FRAME_FULL_REQUIRED);
   } else if (frameFailure) {
     sendJsonError(400, frameFailure);
   } else {

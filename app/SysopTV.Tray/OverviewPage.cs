@@ -29,11 +29,11 @@ namespace SysopTV.Tray
         internal OverviewPage(PageContext ctx, Func<Page[]> allPages) : base(ctx)
         {
             this.allPages = allPages;
-            cubes.Columns.Add("Würfel", 160);
-            cubes.Columns.Add("Funktion", 170);
-            cubes.Columns.Add("Design", 100);
-            cubes.Columns.Add("Gesendet", 66);
-            cubes.Columns.Add("Zustand", 140);
+            cubes.Columns.Add("Würfel", 150);
+            cubes.Columns.Add("Funktion", 165);
+            cubes.Columns.Add("Design", 160);
+            cubes.Columns.Add("Gesendet", 62);
+            cubes.Columns.Add("Zustand", 97);
             Controls.Add(Stack(Heading("Übersicht"), cubes, summaries));
         }
 

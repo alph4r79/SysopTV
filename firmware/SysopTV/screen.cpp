@@ -7,6 +7,7 @@
 
 #include "screen.h"
 #include "config.h"
+#include "frame.h"
 #include "view_common.h"
 #include <TFT_eSPI.h>
 
@@ -49,6 +50,7 @@ TFT_eSPI& screenTft() {
 }
 
 void screenBegin() {
+  frameInvalidate();
   tft.init();
   tft.setRotation(0);
   cBack = TFT_BLACK;
@@ -84,6 +86,7 @@ void screenBrightness(uint8_t percent) {
 }
 
 void screenResetDone() {
+  frameInvalidate();
   tft.fillScreen(cBack);
   vgaText("Passwort", 120, 84, ALIGN_CENTER, 2, cAmber, cBack);
   // UTF-8 for u umlaut, written as escapes to keep the source ASCII.
@@ -92,6 +95,7 @@ void screenResetDone() {
 }
 
 void screenBoot(bool rescue) {
+  frameInvalidate();
   tft.fillScreen(cBack);
   center("SysopTV", 104, 4, cAmber);
   center("v" SYSOPTV_VERSION, 136, 2, cDim);
@@ -101,12 +105,14 @@ void screenBoot(bool rescue) {
 }
 
 void screenConnecting(const String& ssid) {
+  frameInvalidate();
   header();
   center("Verbinde mit WLAN", 100, 2, cDim);
   center(shorten(ssid, 16), 130, 4, cAmber);
 }
 
 void screenReady(const String& ip, const String& host, bool rescue) {
+  frameInvalidate();
   header();
   if (rescue) {
     center("RETTUNGSMODUS", 52, 2, cRed);
@@ -122,12 +128,14 @@ void screenReady(const String& ip, const String& host, bool rescue) {
 }
 
 void screenLost() {
+  frameInvalidate();
   header();
   center("WLAN getrennt", 100, 4, cAmber);
   center("verbinde neu ...", 134, 2, cDim);
 }
 
 void screenSetup(const char* apName) {
+  frameInvalidate();
   header();
   center("WLAN einrichten", 58, 4, cAmber);
   center("1. Mit Hotspot verbinden:", 96, 2, cDim);
@@ -137,6 +145,7 @@ void screenSetup(const char* apName) {
 }
 
 void screenUpdateStart() {
+  frameInvalidate();
   header();
   center("Update", 80, 4, cAmber);
   center("Nicht ausschalten!", 112, 2, cRed);
@@ -144,6 +153,7 @@ void screenUpdateStart() {
 }
 
 void screenUpdateProgress(size_t bytes) {
+  frameInvalidate();
   // Redrawing on every chunk slows the upload down, so only a few times per second.
   unsigned long now = millis();
   if (now - lastProgressDraw < 300) {
@@ -155,6 +165,7 @@ void screenUpdateProgress(size_t bytes) {
 }
 
 void screenUpdateResult(bool ok, const String& message) {
+  frameInvalidate();
   header();
   if (ok) {
     center("Update fertig", 100, 4, cAmber);

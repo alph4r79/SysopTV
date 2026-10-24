@@ -10,7 +10,7 @@
 #   winget install --id JRSoftware.InnoSetup -e
 #
 # Result in dist/:
-#   sysoptv-app-<version>-portable.zip   SysopTV.exe, SysopTV.exe.config, LICENSE
+#   sysoptv-app-<version>-portable.zip   SysopTV.exe, SysopTV.exe.config, LICENSE, font licences
 #   sysoptv-app-<version>-setup.exe      if Inno Setup is installed
 #
 # Optional: ISCC=/path/to/ISCC.exe if Inno Setup is somewhere else.
@@ -46,6 +46,7 @@ rm -f "$ZIP"
 # Git Bash has no zip, Windows PowerShell does.
 STAGE=$(mktemp -d)
 cp "$BIN/SysopTV.exe" "$BIN/SysopTV.exe.config" LICENSE "$STAGE/"
+cp app/assets/fonts/OFL-Inter.txt app/assets/fonts/OFL-JetBrainsMono.txt "$STAGE/"
 powershell.exe -NoProfile -Command \
   "Compress-Archive -Path '$(cygpath -w "$STAGE")\\*' -DestinationPath '$(cygpath -w "$PWD/$ZIP")' -Force"
 rm -rf "$STAGE"

@@ -42,7 +42,14 @@ namespace SysopTV.Tray
         private readonly TextBox adminPassword = new TextBox { Width = 240, UseSystemPasswordChar = true };
         private readonly Button testButton = new Button { Text = "Verbindung testen", AutoSize = true };
         private readonly Label cubeStatus = new Label { AutoSize = true, MaximumSize = new Size(190, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(6, 3, 0, 0) };
-        private Control designRow, modeRow, cycleRow;
+        private readonly ComboBox shopView = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+        private readonly ComboBox period = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        private readonly ComboBox periodCycle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
+        private readonly ComboBox content = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 200 };
+        private readonly ComboBox bigStyle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        private readonly CheckBox claudeFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
+        private readonly CheckBox bigFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
+        private Control designRow, modeRow, cycleRow, viewRow, periodRow, contentRow, styleRow;
 
         // Einstellungen im Würfel (stored in the cube)
         private readonly TableLayoutPanel cubeGrid = Grid();
@@ -89,12 +96,25 @@ namespace SysopTV.Tray
 
             AddRow(connGrid, "Adresse (IP oder Name)", address);
             AddRow(connGrid, "Funktion", function);
-            designRow = design;
+            shopView.Items.AddRange(ShopBig.Views);
+            period.Items.AddRange(ShopBig.Periods);
+            periodCycle.Items.AddRange(new object[] { "nicht wechseln", "alle 30 Sekunden", "alle 60 Sekunden" });
+            content.Items.AddRange(ShopBig.Contents);
+            bigStyle.Items.AddRange(ShopBig.Styles);
+            viewRow = shopView;
+            AddRow(connGrid, "Ansicht", viewRow);
+            designRow = Row(design, claudeFlip);
             AddRow(connGrid, "Design", designRow);
             modeRow = Row(showUsed, showLeft);
             AddRow(connGrid, "Prozent zeigen", modeRow);
             cycleRow = cycle;
             AddRow(connGrid, "Automatisch wechseln", cycleRow);
+            periodRow = Row(period, periodCycle);
+            AddRow(connGrid, "Zeitraum", periodRow);
+            contentRow = content;
+            AddRow(connGrid, "Inhalt", contentRow);
+            styleRow = Row(bigStyle, bigFlip);
+            AddRow(connGrid, "Stil", styleRow);
             AddRow(connGrid, "API-Schlüssel (optional)", apiKey);
             AddRow(connGrid, "Admin-Passwort", adminPassword);
             AddRow(connGrid, null, Row(testButton, cubeStatus));
@@ -157,9 +177,16 @@ namespace SysopTV.Tray
                 }
             };
             function.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
-            design.SelectedIndexChanged += (s, e) => Commit();
+            design.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
             showUsed.CheckedChanged += (s, e) => Commit();
-            cycle.SelectedIndexChanged += (s, e) => Commit();
+            cycle.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
+            shopView.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
+            period.SelectedIndexChanged += (s, e) => Commit();
+            periodCycle.SelectedIndexChanged += (s, e) => Commit();
+            content.SelectedIndexChanged += (s, e) => Commit();
+            bigStyle.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
+            claudeFlip.CheckedChanged += (s, e) => { if (!filling) { bigFlip.Checked = claudeFlip.Checked; Commit(); } };
+            bigFlip.CheckedChanged += (s, e) => { if (!filling) { claudeFlip.Checked = bigFlip.Checked; Commit(); } };
 
             reloadButton.Click += async (s, e) => await LoadCubeSettings();
             saveButton.Click += async (s, e) => await SaveCubeSettings();
@@ -258,7 +285,7 @@ namespace SysopTV.Tray
                 return;
             }
             CubeEntry c = selected;
-            string before = c.Address + "|" + c.Function + "|" + c.Design + "|" + c.ShowUsed + "|" + c.CycleSeconds + "|" + c.ApiKeyProtected + "|" + c.AdminPasswordProtected;
+            string before = Snapshot(c);
             string addr = address.Text.Trim();
             if (addr.Length > 0)
             {
@@ -276,6 +303,15 @@ namespace SysopTV.Tray
             }
             c.ShowUsed = showUsed.Checked;
             c.CycleSeconds = CubeEntry.CycleChoices[Math.Max(0, cycle.SelectedIndex)];
+            if (c.Function == CubeFunction.ShopFrame)
+            {
+                c.ShopView = Picked(shopView, c.ShopView);
+                c.BigPeriod = Picked(period, c.BigPeriod);
+                c.BigContent = Picked(content, c.BigContent);
+                c.BigStyle = Picked(bigStyle, c.BigStyle);
+                c.PeriodCycleSeconds = CubeEntry.CycleChoices[Math.Max(0, periodCycle.SelectedIndex)];
+            }
+            c.Animate = claudeFlip.Checked;
             if (apiKey.Text.Trim() != c.ApiKey)
             {
                 c.ApiKey = apiKey.Text.Trim();
@@ -284,7 +320,7 @@ namespace SysopTV.Tray
             {
                 c.AdminPassword = adminPassword.Text;
             }
-            string after = c.Address + "|" + c.Function + "|" + c.Design + "|" + c.ShowUsed + "|" + c.CycleSeconds + "|" + c.ApiKeyProtected + "|" + c.AdminPasswordProtected;
+            string after = Snapshot(c);
             if (before != after)
             {
                 RefreshList();
@@ -294,6 +330,23 @@ namespace SysopTV.Tray
             {
                 cubeStatus.Text = "Ohne Adresse sendet das Programm nichts an diesen Würfel.";
             }
+        }
+
+        private static string Snapshot(CubeEntry c)
+        {
+            return string.Join("|", c.Address, c.Function, c.Design, c.ShowUsed, c.CycleSeconds, c.ApiKeyProtected, c.AdminPasswordProtected,
+                               c.ShopView, c.BigPeriod, c.BigContent, c.BigStyle, c.PeriodCycleSeconds, c.Animate);
+        }
+
+        private static string Picked(ComboBox box, string current)
+        {
+            var d = box.SelectedItem as DesignInfo;
+            return d != null ? d.Id : current;
+        }
+
+        private static void Pick(ComboBox box, DesignInfo[] list, string id)
+        {
+            box.SelectedItem = Array.Find(list, d => d.Id == id) ?? list[0];
         }
 
         private void SelectCube()
@@ -322,6 +375,12 @@ namespace SysopTV.Tray
             showUsed.Checked = selected.ShowUsed;
             showLeft.Checked = !selected.ShowUsed;
             cycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.CycleSeconds));
+            Pick(shopView, ShopBig.Views, selected.ShopView);
+            Pick(period, ShopBig.Periods, selected.BigPeriod);
+            Pick(content, ShopBig.Contents, selected.BigContent);
+            Pick(bigStyle, ShopBig.Styles, selected.BigStyle);
+            periodCycle.SelectedIndex = Math.Max(0, Array.IndexOf(CubeEntry.CycleChoices, selected.PeriodCycleSeconds));
+            claudeFlip.Checked = bigFlip.Checked = selected.Animate;
             CubeInfo info;
             infos.TryGetValue(selected.Address, out info);
             FillFunctions(info);
@@ -373,6 +432,9 @@ namespace SysopTV.Tray
             }
             bool picture = selected.Function != CubeFunction.Usage;
             bool claude = selected.Function == CubeFunction.ClaudeFrame;
+            bool shop = selected.Function == CubeFunction.ShopFrame;
+            bool big = shop && selected.ShopView == ShopBig.ViewBig;
+            bool wasFilling = filling;
             filling = true;
             design.Items.Clear();
             if (picture)
@@ -380,15 +442,34 @@ namespace SysopTV.Tray
                 design.Items.AddRange(selected.Designs);
                 design.SelectedItem = selected.Designs.First(d => d.Id == selected.DesignOrDefault);
             }
-            filling = false;
+            filling = wasFilling;
             SuspendLayout();
-            ShowRow(connGrid, designRow, picture);
+            ShowRow(connGrid, viewRow, shop);
+            ShowRow(connGrid, designRow, picture && !big);
             ShowRow(connGrid, modeRow, claude);
-            ShowRow(connGrid, cycleRow, picture);
+            ShowRow(connGrid, cycleRow, picture && !big);
+            ShowRow(connGrid, periodRow, big);
+            ShowRow(connGrid, contentRow, big);
+            ShowRow(connGrid, styleRow, big);
+            ShowFlip();
             ShowRow(cubeGrid, fwDesignRow, !picture);
             ShowRow(cubeGrid, fwCycleRow, !picture);
             ShowRow(cubeGrid, fwModeRow, !picture);
             ResumeLayout();
+        }
+
+        // The flip animation only counts where Fallblatt can appear.
+        private void ShowFlip()
+        {
+            if (selected == null)
+            {
+                return;
+            }
+            var d = design.SelectedItem as DesignInfo;
+            claudeFlip.Visible = selected.Function == CubeFunction.ClaudeFrame &&
+                                 ((d != null && d.Id == "fallblatt") || cycle.SelectedIndex > 0);
+            var st = bigStyle.SelectedItem as DesignInfo;
+            bigFlip.Visible = st != null && st.Id == "fallblatt";
         }
 
         private void ShowCubeArea(CubeInfo info)
@@ -407,7 +488,7 @@ namespace SysopTV.Tray
             {
                 return s.DesignNames.ToArray();
             }
-            return ClaudeDesigns.All.Select(d => d.Label).ToArray();
+            return ClaudeDesigns.All.Take(ClaudeDesigns.FirmwareCount).Select(d => d.Label).ToArray();
         }
 
         private void ClearCubeFields()

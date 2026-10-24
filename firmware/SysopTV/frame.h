@@ -51,3 +51,19 @@ bool frameSeen();
 
 // Seconds since the last complete picture, 0 if none arrived yet.
 uint32_t frameAgeSeconds();
+
+// Error text when a part of the screen arrives while the screen is not a
+// complete picture from the PC. The web server answers 409 with it.
+extern const char FRAME_FULL_REQUIRED[];
+
+// True while the whole screen shows what the PC drew. Only then parts of
+// the screen may be sent; otherwise only a full picture (0, 0, 240, 240) is
+// accepted. A full picture makes it valid again.
+bool frameValid();
+
+// Called whenever the firmware draws by itself (design, clock, NO CARRIER,
+// update, system screens). After a restart the screen is never valid.
+void frameInvalidate();
+
+// The upload broke off. Lines already drawn make the screen invalid.
+void frameAbort();

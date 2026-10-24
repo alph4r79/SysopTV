@@ -34,6 +34,7 @@ namespace SysopTV.Tray
         internal ShopPeriod Today = new ShopPeriod();
         internal ShopPeriod Yesterday = new ShopPeriod();
         internal ShopPeriod Week = new ShopPeriod();   // last 7 days including today
+        internal ShopPeriod CalendarWeek = new ShopPeriod();  // since Monday 0:00, shop time
         internal ShopPeriod Month = new ShopPeriod();  // current month
         internal List<ShopPeriod> Days = new List<ShopPeriod>();       // last 14 days, oldest first, today last
         internal List<ShopOrder> TodayOrders = new List<ShopOrder>();  // newest first, at most 20
@@ -64,6 +65,7 @@ namespace SysopTV.Tray
             }
             d.Yesterday = new ShopPeriod { Orders = 7, Revenue = 412.80m };
             d.Week = new ShopPeriod { Orders = 31, Revenue = 1876.40m };
+            d.CalendarWeek = new ShopPeriod { Orders = 23, Revenue = 1398.70m };
             d.Month = new ShopPeriod { Orders = 52, Revenue = 3022.15m };
 
             decimal[] amounts = { 49.90m, 34.90m, 59.80m, 39.90m, 24.95m, 89.00m, 19.90m, 44.50m, 64.90m, 29.90m, 54.00m, 39.00m, 74.90m, 22.50m };
@@ -93,6 +95,28 @@ namespace SysopTV.Tray
                 d.LastOrderAmount = 39.90m;
             }
             return d;
+        }
+    }
+
+    // Day, week and month in the time zone of the shop. The week starts on
+    // Monday at 0:00, the month on the 1st at 0:00.
+    internal static class ShopCalendar
+    {
+        internal static DateTime ShopNow(DateTime utcNow, int offsetMinutes)
+        {
+            return DateTime.SpecifyKind(utcNow, DateTimeKind.Unspecified).AddMinutes(offsetMinutes);
+        }
+
+        internal static DateTime WeekStart(DateTime shopTime)
+        {
+            DateTime day = shopTime.Date;
+            int sinceMonday = ((int)day.DayOfWeek + 6) % 7;
+            return day.AddDays(-sinceMonday);
+        }
+
+        internal static DateTime MonthStart(DateTime shopTime)
+        {
+            return new DateTime(shopTime.Year, shopTime.Month, 1);
         }
     }
 

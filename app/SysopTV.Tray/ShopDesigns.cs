@@ -24,10 +24,10 @@ namespace SysopTV.Tray
     {
         internal static readonly DesignInfo[] All =
         {
-            new DesignInfo("dos", "DOS"),
-            new DesignInfo("heute", "Shop Heute"),
-            new DesignInfo("bon", "Kassenbon"),
-            new DesignInfo("woche", "Shop Woche")
+            new DesignInfo("dos", "Tabelle"),
+            new DesignInfo("heute", "Bestellliste"),
+            new DesignInfo("bon", "Kassenbon Übersicht"),
+            new DesignInfo("woche", "Wochendiagramm")
         };
 
         internal const string Default = "dos";
@@ -232,9 +232,10 @@ namespace SysopTV.Tray
 
         // ---- Kassenbon ----
 
-        private static readonly ushort Paper = Canvas.Rgb(235, 232, 222);
-        private static readonly ushort Ink = Canvas.Rgb(30, 30, 30);
-        private static readonly ushort InkMuted = Canvas.Rgb(120, 117, 108);
+        // Same paper and ink as the big display: black text, muted at most (70,70,70).
+        private static readonly ushort Paper = ShopBig.Paper;
+        private static readonly ushort Ink = ShopBig.Ink;
+        private static readonly ushort InkMuted = ShopBig.InkMuted;
         private static readonly string Dashes = new string('-', 28);
 
         private static Canvas Receipt(ShopView v)
@@ -255,12 +256,7 @@ namespace SysopTV.Tray
             c.TextWide(ShopFormat.Money(d.Today.Revenue), 232, 150, Align.Right, Ink, Paper);
             c.Text("OFFEN: " + d.Unshipped, 8, 174, Align.Left, 1, Ink, Paper);
             c.Text("DANKE FÜR IHREN EINKAUF", 120, 198, Align.Center, 1, InkMuted, Paper);
-            // Torn edge: teeth of 12 pixels, below them the black of the display.
-            for (int x = 0; x < 240; x++)
-            {
-                int edge = 234 - Math.Abs(x % 12 - 6);
-                c.FillRect(x, edge, 1, 240 - edge, Black);
-            }
+            ShopBig.TornEdge(c);
             return c;
         }
 

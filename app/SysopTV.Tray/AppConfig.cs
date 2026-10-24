@@ -8,7 +8,8 @@
 // Version 0.1.0 had one cube (deviceAddress, apiKeyProtected). Such a file is
 // taken over as one cube with the function "usage".
 // Files of version 0.2.0 are read as they are; design, showUsed and
-// cycleSeconds of each cube then get their defaults.
+// cycleSeconds of each cube then get their defaults. Shop cubes of versions
+// before 0.5.0 keep their design under the view "Details".
 
 using System;
 using System.Collections.Generic;
@@ -86,6 +87,16 @@ namespace SysopTV.Tray
         [DataMember(Name = "showUsed")] public bool ShowUsed = true;
         [DataMember(Name = "cycleSeconds")] public int CycleSeconds;
 
+        // Shop as picture: view "big" (Großanzeige) or "details" (the four detail designs).
+        [DataMember(Name = "shopView")] public string ShopView = ShopBig.ViewBig;
+        [DataMember(Name = "bigPeriod")] public string BigPeriod = ShopBig.DefaultPeriod;
+        [DataMember(Name = "bigContent")] public string BigContent = ShopBig.DefaultContent;
+        [DataMember(Name = "bigStyle")] public string BigStyle = ShopBig.DefaultStyle;
+        [DataMember(Name = "periodCycleSeconds")] public int PeriodCycleSeconds;
+
+        // Flip animation of the style Fallblatt, for Claude and the shop.
+        [DataMember(Name = "animate")] public bool Animate = true;
+
         internal static readonly int[] CycleChoices = { 0, 30, 60 };
 
         internal string ApiKey
@@ -111,6 +122,48 @@ namespace SysopTV.Tray
             Design = "";
             ShowUsed = true;
             CycleSeconds = 0;
+            ShopView = "";
+            BigPeriod = ShopBig.DefaultPeriod;
+            BigContent = ShopBig.DefaultContent;
+            BigStyle = ShopBig.DefaultStyle;
+            PeriodCycleSeconds = 0;
+            Animate = true;
+        }
+
+        // What the picture shows now: the style of the big display, or the design.
+        internal string PictureAt(DateTime now)
+        {
+            return ShopBigView ? (ShopBig.Known(ShopBig.Styles, BigStyle) ? BigStyle : ShopBig.DefaultStyle) : DesignAt(now);
+        }
+
+        // Name of a picture for overview and the cube: "Großanzeige Fallblatt", "ANSI".
+        internal string PictureLabel(string picture)
+        {
+            if (ShopBigView)
+            {
+                return "Großanzeige " + ShopBig.Label(ShopBig.Styles, picture);
+            }
+            DesignInfo d = Array.Find(Designs ?? new DesignInfo[0], x => x.Id == picture);
+            return d != null ? d.Label : picture;
+        }
+
+        internal bool ShopBigView
+        {
+            get { return Function == CubeFunction.ShopFrame && ShopView == ShopBig.ViewBig; }
+        }
+
+        // The period to show now: with change Heute, Woche, Monat one after the
+        // other, starting with the chosen one.
+        internal string PeriodAt(DateTime now)
+        {
+            string chosen = ShopBig.Known(ShopBig.Periods, BigPeriod) ? BigPeriod : ShopBig.DefaultPeriod;
+            if (PeriodCycleSeconds <= 0)
+            {
+                return chosen;
+            }
+            int start = Array.FindIndex(ShopBig.Periods, d => d.Id == chosen);
+            long step = new DateTimeOffset(now).ToUnixTimeSeconds() / PeriodCycleSeconds;
+            return ShopBig.Periods[(int)((start + step) % ShopBig.Periods.Length)].Id;
         }
 
         // The designs to choose from for the function of this cube, null for "usage".
@@ -158,6 +211,27 @@ namespace SysopTV.Tray
         private void OnDeserialized(StreamingContext context)
         {
             Design = Design ?? "";
+            // No view stored: a file from before 0.5.0, the shop design goes on as a detail design.
+            if (ShopView != ShopBig.ViewBig && ShopView != ShopBig.ViewDetails)
+            {
+                ShopView = ShopBig.ViewDetails;
+            }
+            if (!ShopBig.Known(ShopBig.Periods, BigPeriod))
+            {
+                BigPeriod = ShopBig.DefaultPeriod;
+            }
+            if (!ShopBig.Known(ShopBig.Contents, BigContent))
+            {
+                BigContent = ShopBig.DefaultContent;
+            }
+            if (!ShopBig.Known(ShopBig.Styles, BigStyle))
+            {
+                BigStyle = ShopBig.DefaultStyle;
+            }
+            if (Array.IndexOf(CycleChoices, PeriodCycleSeconds) < 0)
+            {
+                PeriodCycleSeconds = 0;
+            }
             if (Array.IndexOf(CycleChoices, CycleSeconds) < 0)
             {
                 CycleSeconds = 0;

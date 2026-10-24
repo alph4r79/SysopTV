@@ -40,6 +40,7 @@ namespace SysopTV.Tray
         internal long Uptime;          // seconds
         internal bool Rescue;
         internal List<string> Capabilities = new List<string>();
+        internal bool? FrameValid;     // since 0.4.3: the screen shows the whole picture from the PC
 
         internal bool Can(string capability)
         {
@@ -213,7 +214,8 @@ namespace SysopTV.Tray
                         DeviceName = Text(j, "deviceName"),
                         Version = Text(j, "version"),
                         UptimeText = Text(j, "uptimeText"),
-                        Rescue = true.Equals(Value(j, "rescue"))
+                        Rescue = true.Equals(Value(j, "rescue")),
+                        FrameValid = j.ContainsKey("frameValid") ? true.Equals(Value(j, "frameValid")) : (bool?)null
                     };
                     long uptime;
                     long.TryParse(Text(j, "uptime"), NumberStyles.Integer, CultureInfo.InvariantCulture, out uptime);

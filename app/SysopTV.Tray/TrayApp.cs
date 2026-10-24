@@ -66,8 +66,39 @@ namespace SysopTV.Tray
                 legacyTimer.Stop();
                 legacyTimer.Dispose();
                 CheckLegacyScript();
+                WatchLegacyScript();
             };
             legacyTimer.Start();
+            watchTimer.Tick += (s, e) => WatchLegacyScript();
+            watchTimer.Start();
+        }
+
+        // Every 10 minutes: does the old PowerShell sender run? Only a hint, the
+        // program never ends that process itself.
+        private readonly System.Windows.Forms.Timer watchTimer = new System.Windows.Forms.Timer { Interval = 10 * 60 * 1000 };
+        private bool legacyBalloonShown;
+
+        private void WatchLegacyScript()
+        {
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                bool running = LegacyScript.CountRunning() > 0;
+                invoker.BeginInvoke((Action)(() =>
+                {
+                    if (running && !service.LegacyRunning)
+                    {
+                        Log.Write("Altes PowerShell-Skript sendet parallel");
+                    }
+                    service.SetLegacyRunning(running);
+                    if (running && !legacyBalloonShown)
+                    {
+                        legacyBalloonShown = true;
+                        notify.ShowBalloonTip(8000, "SysopTV",
+                            "Das alte PowerShell-Skript sysoptv-sender.ps1 sendet parallel an den Würfel. Beende es im Task-Manager (powershell.exe).",
+                            ToolTipIcon.Warning);
+                    }
+                }));
+            });
         }
 
         private void UpdateUi()
@@ -208,6 +239,7 @@ namespace SysopTV.Tray
         protected override void ExitThreadCore()
         {
             showWait.Unregister(null);
+            watchTimer.Dispose();
             service.Dispose();
             notify.Visible = false;
             notify.Dispose();

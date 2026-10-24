@@ -27,7 +27,7 @@ The name comes from the sysop, who in the days of dial-up mailboxes kept an eye 
 
 ## Status
 
-Firmware version 0.4.2, Windows program version 0.4.0.
+Firmware version 0.4.3, Windows program version 0.5.2.
 
 Tested on real hardware:
 
@@ -52,7 +52,8 @@ Not yet tested on real hardware, so there is no promise that these work:
 - picture mode with `/api/frame` (new in 0.4.0)
 - "nicht aktiv" for a session without reset time (new in 0.4.1)
 - the overview page in picture mode and the fall back to the own design with fresh numbers (new in 0.4.2)
-- the Windows program 0.4.0
+- the valid picture: no parts on a screen the cube drew itself (new in 0.4.3)
+- the Windows program 0.5.2
 
 ## How it works
 
@@ -93,26 +94,47 @@ It can feed several cubes. Each cube in the list gets one function:
 
 - **Claude, Würfel zeichnet selbst** (Claude, the cube draws itself): the program sends only the numbers, the cube shows them in its own design. Works with every firmware.
 - **Claude als Bild** (Claude as picture): the program draws one of the six designs of the firmware itself and sends it as a picture. Needs firmware 0.4.0 or newer (picture mode). With firmware 0.4.2 or newer the program also sends the numbers, so the cube can show its own design with real values when the pictures stop.
-- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop as a picture, in one of four shop designs. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
+- **Shop als Bild** (shop as picture): orders and revenue of a Shopify shop as a picture, as a big display of one number or in one of four detail views. Needs firmware 0.4.0 or newer and a Shopify access, see "Shopify".
 
-The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out.
+The limits are fetched from Anthropic only once per round, no matter how many cubes show Claude. The pictures are drawn every second but only sent when something changes, and then only the changed parts of the screen (up to four, joined when one part is smaller). After a restart of the cube and at least every 10 minutes the whole picture goes out. If nothing changes for 60 seconds, the program sends a sign of life (a tiny part, or the full picture for firmware before 0.4.3 or when the cube does not report a valid picture), so the cube never falls back to its own design while the program runs. Since firmware 0.4.3 the cube refuses parts while its screen is not a complete picture from the PC (answer 409), and the program then sends the full picture at once.
 
 The program remembers the time of the last query, a pause after error 429 and the last valid values in `%LOCALAPPDATA%\SysopTV\state.json` (never the login key). After a restart it waits until the interval has passed and the pause is over, and shows the stored values until then.
 
-Version 0.4.0 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
+Version 0.5.2 of the program is not yet tested on real hardware, except for the parts it took over from 0.1.0.
 
 ### Designs as pictures
 
-For "Claude als Bild" the program draws the designs Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik with the same colours, fonts and positions as firmware 0.4.1, including "nicht aktiv" and "ÜBRIG". Per cube you choose the design, used or remaining, and optionally an automatic change every 30 or 60 seconds, which the program does.
+For "Claude als Bild" the program draws the designs Säulen, Phosphor, DOS, ANSI, Bernstein and Klassik with the same colours, fonts and positions as the firmware, including "nicht aktiv" and "ÜBRIG". Four more styles exist only as pictures:
+
+- **LED-Matrix**: only lit round dots on pure black, like a display board. The values sit in a big grid (one dot per pixel of the VGA font), labels and secondary values in a grid exactly half as big with a 5x7 dot font. On top SESSION, the session big, below WOCHE with the week, at the bottom the time until the reset. Below 20 % left the main value turns yellow.
+- **Hell** (light): a calm light layout with the font Inter, session and week each with a bar and the reset.
+- **Fallblatt** (split flap): every character on its own card with a split in the middle. When a character changes, its card flips over in three small steps within about 400 ms. The animation can be switched off per cube.
+- **4-Ton-Grün** (four tone green): only four shades of green, the VGA font scaled up, block bars and a 3 pixel frame. Below 20 % left the value blinks instead of changing its colour.
+
+Per cube you choose the design, used or remaining, and optionally an automatic change every 30 or 60 seconds, which the program does.
+
+The panel of the cube shows very dark colours much too bright and with a green tint, and medium grey on a light background almost disappears. The picture styles therefore use pure black for dark backgrounds, black text on light backgrounds (muted text at most dark grey) and keep at least 8 pixels from the edge.
 
 Values that are not fresh stay on the screen with a small "Stand HH:MM" (as of). An expired login shows "ANMELDUNG ABGELAUFEN" in the colours of the design. As long as there are no values at all, the program sends no picture, and after 3 minutes the cube shows its own display without PC. The same applies to the shop.
 
-For "Shop als Bild" there are four designs, all with the 8x16 VGA font:
+For "Shop als Bild" you first choose the view per cube.
 
-- **DOS**: table of today, yesterday, 7 days and the month with orders and revenue, the average, open orders and the last order.
-- **Shop Heute** (shop today): today's orders, newest first, with time, order number, amount and a green tick for shipped or a yellow dot for open. If more orders come in than fit, the last line says how many more. Without orders it shows "Noch keine Bestellung heute" and when the last one came. At the bottom the number of orders and the revenue of today.
-- **Kassenbon** (receipt): a receipt on light paper with today, yesterday, 7 days and month, the sum of today in double width, the open orders and a torn edge.
-- **Shop Woche** (shop week): the revenue of the last 7 days in amber, the change to the week before, one bar per day with today on the right, and the number of orders with the average.
+**Großanzeige** (big display) shows one period with one big number:
+
+- period: today, this week (since Monday 0:00) or this month (since the 1st), in the time zone of the shop, optionally changing every 30 or 60 seconds
+- content: only orders, only revenue, or both (the count big, the revenue below at about half the height)
+- style: Kassenbon, DOS, Bernstein, LED-Matrix, Hell, Fallblatt or 4-Ton-Grün
+
+On top the shop name, then the period as a heading (HEUTE, DIESE WOCHE or the name of the month), the number as large as fits, and below it BESTELLUNGEN or UMSATZ. With both, the count comes first, directly below it BESTELLUNGEN, then the revenue. Amounts from 1000 on have no cents and a dot (3.022 €), below that a comma (184,50 €). A number that does not fit gets a smaller size, it is never cut.
+
+**Details** are the four earlier designs, all with the 8x16 VGA font:
+
+- **Tabelle** (table, formerly DOS): table of today, yesterday, 7 days and the month with orders and revenue, the average, open orders and the last order.
+- **Bestellliste** (order list, formerly Shop Heute): today's orders, newest first, with time, order number, amount and a green tick for shipped or a yellow dot for open. If more orders come in than fit, the last line says how many more. Without orders it shows "Noch keine Bestellung heute" and when the last one came. At the bottom the number of orders and the revenue of today.
+- **Kassenbon Übersicht** (receipt overview, formerly Kassenbon): a receipt on light paper with today, yesterday, 7 days and month, the sum of today in double width, the open orders and a torn edge.
+- **Wochendiagramm** (week chart, formerly Shop Woche): the revenue of the last 7 days in amber, the change to the week before, one bar per day with today on the right, and the number of orders with the average.
+
+Shop cubes of older versions keep their design under "Details" with the new name.
 
 The icon in the taskbar shows the state by colour:
 
@@ -138,7 +160,7 @@ At the top the window shows the state and the time of the last sending. On the l
 
 - **Übersicht** (overview): one line per cube with name, function, design, last sending and state in colour, below the Claude values and the shop values of today.
 - **Würfel** (cubes): the list of cubes on the left with "Suchen" (search for cubes in your local network, a click on a result adds it), "Von Hand hinzufügen" (add by hand) and "Entfernen" (remove). On the right the selected cube in two parts:
-  - **Verbindung und Funktion** (connection and function): address, function, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). For "Claude als Bild" and "Shop als Bild" also the design, used or remaining (only Claude) and the automatic change.
+  - **Verbindung und Funktion** (connection and function): address, function, the optional API key (see "Optional API key"), the admin password of the cube and "Verbindung testen" (test connection, shows firmware version and uptime). For "Claude als Bild" also the design, used or remaining and the automatic change. For "Shop als Bild" the view, then either period, content and style of the big display, or the detail design and its change. The flip animation can be switched off where the style Fallblatt is used.
   - **Einstellungen im Würfel** (settings in the cube): brightness, night mode and device name, for "Claude, Würfel zeichnet selbst" also the design, change and used or remaining of the cube. With an admin password they are loaded on their own when the window opens, when you choose a cube and when you open the page. "Auf dem Würfel speichern" stays locked until the values were loaded, and after saving the program reads them back. "Neu laden" loads them again. This needs firmware 0.4.0 or newer, otherwise a button opens the settings page of the cube in the browser.
 
   Fields that do not count for the chosen function are hidden.
@@ -152,7 +174,7 @@ When no session is running, the status line, the tooltip, the overview and the p
 
 The settings are stored in `%APPDATA%\SysopTV\config.json`, API keys, admin passwords and the Shopify access only encrypted for your Windows user. Configurations of versions 0.1.0 and 0.2.0 are taken over automatically. Cubes from 0.2.0 with a picture function get the design DOS, "verbraucht" and no automatic change. The log is `%LOCALAPPDATA%\SysopTV\app.log` (at most 1 MB, then one backup `app.old.log`). The program only connects to `api.anthropic.com`, to your shop at Shopify (only if set up) and to the cubes, and the search only to addresses in your local network. There is no telemetry and no update check.
 
-If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC.
+If the program finds the PowerShell script in the startup folder or running, it offers once per start to move the shortcut to `%APPDATA%\SysopTV\alt\`. Running scripts are not stopped, end them in the Task Manager or restart the PC. Every 10 minutes the program checks again whether a process with `sysoptv-sender.ps1` in its command line runs. If so, the status line says "Altes PowerShell-Skript sendet parallel" in the warning colour and a notification appears once.
 
 For a test from the command line, `SysopTV.exe --once` queries the limits once, sends them to the first cube with "Claude, Würfel zeichnet selbst" and prints the result. `--device 192.168.178.50` sends to another address for this one run. `SysopTV.exe --preview C:\Pfad\zu\ordner` writes every picture design with sample data as PNG files, without network. `--once` also keeps to the 120 seconds after the last query and updates `state.json`.
 
@@ -288,7 +310,7 @@ These are used by the Windows program. They are documented here for anyone who w
 - `GET /api/info` (always open): status as JSON. Since 0.4.0 also `deviceName` and `capabilities` (`["usage","settings","frame"]`), since 0.4.2 `frameSource` and `frameAgeSeconds` (name and age of the last picture, `null` before the first one).
 - `POST /api/usage`: usage data from the sender, see the existing senders. Needs the header `X-SysopTV-Key` if an API key is set.
 - `GET /api/settings` and `POST /api/settings`: the display settings as JSON (design, automatic change, used or remaining, brightness, night mode, device name). Both need the admin password (HTTP Basic Auth) if one is set. `POST` only works with `Content-Type: application/json` and the header `X-SysopTV-Client: app`, otherwise the cube answers 400. All fields are optional, the values are checked like on the settings page. The answer contains the stored values. The cube allows no cross-origin requests (no CORS), so web pages cannot use this interface.
-- `POST /api/frame`: picture mode, see below. Since 0.4.2 with the optional header `X-SysopTV-Source`, a short name of the picture for the overview page.
+- `POST /api/frame`: picture mode, see below. Since 0.4.2 with the optional header `X-SysopTV-Source`, a short name of the picture for the overview page. Since 0.4.3 a part of the screen is refused with `409` and `full_frame_required` while the screen is not a complete picture from the PC; `/api/info` reports this as `frameValid`.
 
 ## Picture mode
 
@@ -365,6 +387,11 @@ Later the cube could show data of other services as well. The window of the prog
 The firmware, the Windows program and the PowerShell script are licensed under the GNU General Public License v3.0, see [LICENSE](LICENSE).
 
 The embedded font in `firmware/SysopTV/font_vga.h` is **not** under the GPL. It is converted from "Px437 IBM VGA 8x16" of [The Ultimate Oldschool PC Font Pack](https://int10h.org/oldschool-pc-fonts/) by VileR and licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). The same applies to `app/SysopTV.Tray/VgaFont.cs`, which adds the euro sign from "PxPlus IBM VGA 8x16" of the same font pack.
+
+The styles Hell and Fallblatt use two fonts under the [SIL Open Font License 1.1](https://openfontlicense.org/). They are embedded in the program, nothing is installed in Windows, and the license texts are in `app/assets/fonts/` and next to the program:
+
+- [Inter](https://github.com/rsms/inter) 4.1 (Regular and Bold), Copyright (c) 2016 The Inter Project Authors, from the official release on GitHub. License: `OFL-Inter.txt`.
+- [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) 2.304 (Bold), Copyright 2020 The JetBrains Mono Project Authors, from the official release on GitHub. License: `OFL-JetBrainsMono.txt`.
 
 `app/SysopTV.Tray/TftFonts.cs` contains the fonts of TFT_eSPI 2.5.43 as plain bitmaps, so the pictures of the program look like the display: the GLCD font of Adafruit_GFX (Copyright (c) 2012 Adafruit Industries, BSD license) and Font 2, 4 and 8 of TFT_eSPI (Copyright (c) 2023 Bodmer, FreeBSD license). The license texts are in the head of the file.
 

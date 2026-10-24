@@ -68,6 +68,8 @@ namespace SysopTV.Tray
             internal DateTime? LastSend;
             internal string ShownDesign;
             internal string Firmware;  // version from /api/info, null until known
+            internal bool? FrameValid; // the cube shows our whole picture (firmware 0.4.3 and newer), null if unknown
+            internal DateTime LastFrameSend = DateTime.MinValue;
         }
 
         private readonly ClaudeClient claude = new ClaudeClient();
@@ -415,10 +417,9 @@ namespace SysopTV.Tray
         }
 
         // Name of the picture for the overview page of the cube.
-        internal static string SourceText(CubeEntry c, string design)
+        internal static string SourceText(CubeEntry c, string picture)
         {
-            DesignInfo d = (c.Designs ?? new DesignInfo[0]).FirstOrDefault(x => x.Id == design);
-            string label = d != null ? d.Label : design;
+            string label = c.PictureLabel(picture);
             return c.Function == CubeFunction.ShopFrame ? "Shop: " + label : "Claude als Bild: " + label;
         }
 
@@ -446,63 +447,7 @@ namespace SysopTV.Tray
                 bool changed = false;
                 foreach (CubeEntry c in cfg.Cubes.Where(c => c.Function != CubeFunction.Usage))
                 {
-                    CubeState st;
-                    lock (gate)
-                    {
-                        st = StateFor(c);
-                    }
-                    string design = c.DesignAt(DateTime.Now);
-                    Canvas canvas = Render(c, design, DateTime.Now);
-                    if (canvas == null)
-                    {
-                        continue;
-                    }
-                    st.ShownDesign = design;
-                    bool full = st.LastSent == null || DateTime.Now - st.LastFull >= FullFrameEvery;
-                    if (DateTime.Now - st.LastInfo >= InfoEvery)
-                    {
-                        st.LastInfo = DateTime.Now;
-                        CubeInfo info = Cube.GetInfo(c.Address, TimeSpan.FromSeconds(3));
-                        if (info != null)
-                        {
-                            // Smaller uptime than before: the cube restarted and lost its picture.
-                            if (st.LastUptime >= 0 && info.Uptime < st.LastUptime)
-                            {
-                                full = true;
-                            }
-                            st.LastUptime = info.Uptime;
-                            st.Firmware = info.Version;
-                        }
-                    }
-                    List<Rectangle> parts = full ? new List<Rectangle> { new Rectangle(0, 0, Canvas.Size, Canvas.Size) }
-                                                 : FrameCodec.ChangedAreas(st.LastSent, canvas);
-                    if (parts.Count == 0)
-                    {
-                        continue;
-                    }
-                    SendResult r = null;
-                    foreach (Rectangle part in parts)
-                    {
-                        r = Cube.SendFrame(c.Address, FrameCodec.Encode(canvas, part), c.ApiKey, SourceText(c, design));
-                        if (!r.Ok)
-                        {
-                            break;
-                        }
-                    }
-                    Remember(c, r);
-                    if (r.Ok)
-                    {
-                        st.LastSent = canvas;
-                        if (full)
-                        {
-                            st.LastFull = DateTime.Now;
-                        }
-                    }
-                    else
-                    {
-                        st.LastSent = null;  // next time a full picture
-                    }
-                    changed = true;
+                    changed |= FrameRound(c, DateTime.Now);
                 }
                 if (changed)
                 {
@@ -517,6 +462,145 @@ namespace SysopTV.Tray
             {
                 Interlocked.Exchange(ref frameBusy, 0);
             }
+        }
+
+        // Sending a part and reading /api/info. The offline tests put fakes here.
+        internal Func<string, byte[], string, string, SendResult> SendFrameTo = Cube.SendFrame;
+        internal Func<string, CubeInfo> ReadInfo = address => Cube.GetInfo(address, TimeSpan.FromSeconds(3));
+
+        // A picture at least this often, so the cube never leaves picture mode
+        // (it falls back after 3 minutes without one).
+        internal static readonly TimeSpan KeepAlive = TimeSpan.FromSeconds(60);
+
+        // Firmware before 0.4.3 cannot say whether its screen still shows our
+        // picture. After this long without a picture it may have fallen back.
+        private static readonly TimeSpan MaybeFallenBack = TimeSpan.FromSeconds(170);
+
+        private static readonly Rectangle WholeScreen = new Rectangle(0, 0, Canvas.Size, Canvas.Size);
+
+        // A small part in the corner, which is background in every style.
+        private static readonly Rectangle KeepAlivePart = new Rectangle(0, 0, 8, 8);
+
+        // The cube answered 409: its screen is not our picture, only a full one helps.
+        internal static bool NeedsFullFrame(SendResult r)
+        {
+            return r != null && !r.Ok && r.Status == 409 && (r.Message ?? "").Contains("full_frame_required");
+        }
+
+        // One second for one picture cube: draw, decide what to send, send it.
+        // Returns true if something was sent.
+        internal bool FrameRound(CubeEntry c, DateTime now)
+        {
+            CubeState st;
+            lock (gate)
+            {
+                st = StateFor(c);
+            }
+            string design = c.PictureAt(now);
+            Canvas canvas = Render(c, design, now);
+            if (canvas == null)
+            {
+                return false;
+            }
+            st.ShownDesign = design;
+            bool full = st.LastSent == null || now - st.LastFull >= FullFrameEvery;
+            if (now - st.LastInfo >= InfoEvery)
+            {
+                st.LastInfo = now;
+                CubeInfo info = ReadInfo(c.Address);
+                if (info != null)
+                {
+                    // Smaller uptime than before: the cube restarted and lost its picture.
+                    if (st.LastUptime >= 0 && info.Uptime < st.LastUptime)
+                    {
+                        full = true;
+                    }
+                    st.LastUptime = info.Uptime;
+                    st.Firmware = info.Version;
+                    st.FrameValid = info.FrameValid;
+                }
+            }
+            bool knowsValid = st.Firmware != null && CubeInfo.CompareVersion(st.Firmware, 0, 4, 3) >= 0;
+            TimeSpan quiet = now - st.LastFrameSend;
+            // Never a part on a screen the cube drew itself.
+            if (st.FrameValid == false || (!knowsValid && quiet >= MaybeFallenBack))
+            {
+                full = true;
+            }
+            List<Rectangle> parts = full ? new List<Rectangle> { WholeScreen } : FrameCodec.ChangedAreas(st.LastSent, canvas);
+            if (parts.Count == 0)
+            {
+                if (quiet < KeepAlive)
+                {
+                    return false;
+                }
+                // Sign of life: a tiny part if the cube reports a valid picture,
+                // otherwise (and for firmware before 0.4.3) the full picture.
+                full = !(knowsValid && st.FrameValid == true);
+                parts = new List<Rectangle> { full ? WholeScreen : KeepAlivePart };
+            }
+            SendResult r = null;
+            string source = SourceText(c, design);
+            // Fallblatt: the changing cards flip over in three small steps first.
+            if (!full && design == "fallblatt" && c.Animate)
+            {
+                Canvas shown = st.LastSent;
+                foreach (Canvas frame in FlipAnimation.Frames(st.LastSent, canvas))
+                {
+                    r = SendParts(c, frame, FrameCodec.ChangedAreas(shown, frame), source);
+                    if (!r.Ok)
+                    {
+                        break;
+                    }
+                    shown = frame;
+                    Thread.Sleep(FlipAnimation.StepMilliseconds);
+                }
+                if (r == null || r.Ok)
+                {
+                    parts = FrameCodec.ChangedAreas(shown, canvas);
+                }
+            }
+            if (r == null || r.Ok)
+            {
+                r = parts.Count > 0 ? SendParts(c, canvas, parts, source) : new SendResult { Ok = true };
+            }
+            if (NeedsFullFrame(r))
+            {
+                // At once, not in the next round: otherwise the cube shows a mixed picture.
+                Log.Write("Würfel " + c.Title + " verlangt ein volles Bild, wird gesendet");
+                full = true;
+                r = SendParts(c, canvas, new List<Rectangle> { WholeScreen }, source);
+            }
+            Remember(c, r);
+            if (r.Ok)
+            {
+                st.LastSent = canvas;
+                st.LastFrameSend = now;
+                if (full)
+                {
+                    st.LastFull = now;
+                    st.FrameValid = knowsValid ? true : (bool?)null;
+                }
+            }
+            else
+            {
+                st.LastSent = null;  // next time a full picture
+            }
+            return true;
+        }
+
+        private SendResult SendParts(CubeEntry c, Canvas canvas, List<Rectangle> parts, string source)
+        {
+            SendResult r = new SendResult { Ok = true };
+            foreach (Rectangle part in parts)
+            {
+                r = SendFrameTo(c.Address, FrameCodec.Encode(canvas, part), c.ApiKey, source);
+                if (!r.Ok)
+                {
+                    break;
+                }
+            }
+            return r;
         }
 
         // Values not refreshed within the interval plus a minute count as old.
@@ -542,6 +626,19 @@ namespace SysopTV.Tray
                 string stamp = Stamp(lastOkTime, TimeSpan.FromSeconds(config.Interval + 60), now);
                 ViewModel v = UsageView.Build(lastOk, login, stamp, c.ShowUsed, new DateTimeOffset(now));
                 return ClaudeDesigns.Render(design, v);
+            }
+            if (c.ShopBigView && shopData != null)
+            {
+                var big = new ShopBigView
+                {
+                    Data = shopData,
+                    ShopName = config.Shop.DisplayName,
+                    Now = now,
+                    Stamp = Stamp(shopOkTime, ShopInterval + ShopInterval + TimeSpan.FromMinutes(1), now),
+                    Period = c.PeriodAt(now),
+                    Content = c.BigContent
+                };
+                return ShopBig.Render(design, big);
             }
             if (c.Function == CubeFunction.ShopFrame && shopData != null)
             {
@@ -574,9 +671,9 @@ namespace SysopTV.Tray
                     }
                     else
                     {
-                        string id = st != null && st.ShownDesign != null ? st.ShownDesign : c.DesignOrDefault;
-                        DesignInfo info = c.Designs.FirstOrDefault(d => d.Id == id);
-                        row.Design = (info != null ? info.Label : id) + (c.CycleSeconds > 0 ? ", Wechsel" : "");
+                        string id = st != null && st.ShownDesign != null ? st.ShownDesign : c.PictureAt(DateTime.Now);
+                        bool change = c.ShopBigView ? c.PeriodCycleSeconds > 0 : c.CycleSeconds > 0;
+                        row.Design = c.PictureLabel(id) + (change ? ", Wechsel" : "");
                     }
                     if (st == null || st.LastResult == null)
                     {
@@ -598,6 +695,24 @@ namespace SysopTV.Tray
                 }
             }
             return rows;
+        }
+
+        private bool legacyRunning;
+
+        // Set by the check for the old PowerShell sender every 10 minutes.
+        internal void SetLegacyRunning(bool running)
+        {
+            if (running == legacyRunning)
+            {
+                return;
+            }
+            legacyRunning = running;
+            UpdateStatus();
+        }
+
+        internal bool LegacyRunning
+        {
+            get { return legacyRunning; }
         }
 
         private void UpdateStatus()
@@ -654,6 +769,16 @@ namespace SysopTV.Tray
                 s.Line = "Shop: heute " + ShopFormat.Orders(shopData.Today.Orders) + ", " + ShopFormat.Money(shopData.Today.Revenue) + " (" + time + ")";
                 s.Tooltip = "SysopTV: Shop heute " + ShopFormat.Orders(shopData.Today.Orders);
                 s.Detail = shopData.Error ?? "";
+            }
+            if (legacyRunning)
+            {
+                // The old script sends as well: shown first, in the warning colour.
+                s.Line = "Altes PowerShell-Skript sendet parallel. " + s.Line;
+                s.Tooltip = "SysopTV: altes PowerShell-Skript sendet parallel";
+                if (s.Kind != StatusKind.Error)
+                {
+                    s.Kind = StatusKind.Warn;
+                }
             }
             Status = s;
             Action handler = StatusChanged;

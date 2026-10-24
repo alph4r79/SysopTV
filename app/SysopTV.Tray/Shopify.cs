@@ -57,12 +57,13 @@ namespace SysopTV.Tray
                 result.ShopName = Dict(Dict(shop, "shop"), "name")["__value"] as string ?? "";
                 int offset = Convert.ToInt32(Dict(Dict(shop, "shop"), "timezoneOffsetMinutes")["__value"] ?? 0,
                                              CultureInfo.InvariantCulture);
-                DateTime shopNow = DateTime.UtcNow.AddMinutes(offset);
+                DateTime shopNow = ShopCalendar.ShopNow(DateTime.UtcNow, offset);
                 result.ShopNow = shopNow;
                 DateTime today = shopNow.Date;
                 DateTime weekStart = today.AddDays(-6);
+                DateTime calendarWeek = ShopCalendar.WeekStart(today);
                 DateTime daysStart = today.AddDays(-13);
-                DateTime monthStart = new DateTime(today.Year, today.Month, 1);
+                DateTime monthStart = ShopCalendar.MonthStart(today);
                 DateTime from = daysStart < monthStart ? daysStart : monthStart;
                 for (int i = 0; i < 14; i++)
                 {
@@ -116,6 +117,7 @@ namespace SysopTV.Tray
                         Add(result.Today, created.Date == today, amount);
                         Add(result.Yesterday, created.Date == today.AddDays(-1), amount);
                         Add(result.Week, created.Date >= weekStart, amount);
+                        Add(result.CalendarWeek, created.Date >= calendarWeek, amount);
                         Add(result.Month, created.Date >= monthStart, amount);
                     }
                     var info = Dict(orders, "pageInfo");

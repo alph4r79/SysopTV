@@ -34,13 +34,24 @@ static const char* error = "";
 
 static bool modeOn = false;
 static bool seen = false;
+static bool valid = false;        // the whole screen shows a picture from the PC
+
+const char FRAME_FULL_REQUIRED[] = "full_frame_required";
 static unsigned long lastFrame = 0;
 static char source[SYSOPTV_FRAME_SOURCE_MAX + 1] = "";
 
 static bool fail(const char* text) {
+  // Lines that were already drawn leave a mixed screen behind.
+  if (row > 0) {
+    valid = false;
+  }
   phase = PHASE_ERROR;
   error = text;
   return false;
+}
+
+static bool fullScreen() {
+  return fx == 0 && fy == 0 && fw == SIZE && fh == SIZE;
 }
 
 void frameStart() {
@@ -65,6 +76,10 @@ static bool parseHeader() {
   fh = headerWord(10);
   if (fw == 0 || fh == 0 || fx >= SIZE || fy >= SIZE || fw > SIZE - fx || fh > SIZE - fy) {
     return fail("Ausschnitt ausserhalb von 240x240");
+  }
+  // A part would land on top of something the firmware drew itself.
+  if (!valid && !fullScreen()) {
+    return fail(FRAME_FULL_REQUIRED);
   }
   phase = PHASE_CONTROL;
   return true;
@@ -169,7 +184,22 @@ bool frameFinish() {
   modeOn = true;
   seen = true;
   lastFrame = millis();
+  if (fullScreen()) {
+    valid = true;
+  }
   return true;
+}
+
+bool frameValid() {
+  return valid;
+}
+
+void frameInvalidate() {
+  valid = false;
+}
+
+void frameAbort() {
+  fail("Upload abgebrochen");
 }
 
 const char* frameError() {

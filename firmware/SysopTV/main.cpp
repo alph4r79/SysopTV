@@ -111,6 +111,8 @@ static void updateView() {
   UsageView view;
   usageBuildView(view);
   netIpText(view.ip, sizeof(view.ip));
+  // The design draws over whatever the PC sent last.
+  frameInvalidate();
   design.show(view);
 }
 
