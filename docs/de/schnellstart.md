@@ -42,7 +42,7 @@ Ausführlich auf Englisch: [Windows app](../windows-app.md).
 ## 4. Funktion und Design wählen
 
 - **Claude Limits**: zeigt deine 5-Stunden-Session und dein Wochenlimit. Design wählen (zehn zur Auswahl), dazu „verbraucht“ oder „übrig“ und auf Wunsch einen automatischen Wechsel.
-- **Shopify** oder **WooCommerce**: zeigt Bestellungen und Umsatz. Unter „Ansicht“ entweder „Großanzeige“ mit Zeitraum, Inhalt und Stil, oder „Details“ mit einer von vier Detailansichten.
+- **Shopify** oder **WooCommerce**: zeigt Bestellungen und Umsatz. Unter „Ansicht“ entweder „Großanzeige“ mit Zeitraum, Inhalt und einem von elf Stilen, oder „Details“ mit einer von vier Detailansichten. Die Stile Klassik, Säulen, Phosphor und ANSI zeigen immer mehrere Zeiträume zusammen, dann sind Zeitraum und Inhalt ausgegraut.
 
 Alle Designs mit Bildern: [Designs](../designs.md).
 

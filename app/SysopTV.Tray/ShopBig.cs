@@ -2,12 +2,12 @@
 // Licensed under the GNU General Public License v3.0, see LICENSE.
 //
 // Shop big display: one period (today, this week since Monday, this month,
-// this year)
-// with one big number, in seven styles. The same layout for all styles:
+// this year) with one big number, in seven styles. The same layout for these:
 // shop name small on top, the period as a heading, the main number as large
 // as fits, below it the label. With "both" the count comes first, directly
 // below it BESTELLUNGEN, then the revenue, so the amount is never read as a
-// count. Everything keeps at least 8 px from the edge of the picture.
+// count. Everything keeps at least 8 px from the edge of the picture. Four
+// more styles show several periods at once, see ShopBigPeriods.cs.
 
 using System;
 using System.Drawing;
@@ -26,7 +26,7 @@ namespace SysopTV.Tray
         internal string Source = ShopSources.Shopify;
     }
 
-    internal static class ShopBig
+    internal static partial class ShopBig
     {
         internal const string ViewBig = "big";
         internal const string ViewDetails = "details";
@@ -62,7 +62,11 @@ namespace SysopTV.Tray
             new DesignInfo("led", "LED-Matrix"),
             new DesignInfo("hell", "Hell"),
             new DesignInfo("fallblatt", "Fallblatt"),
-            new DesignInfo("gruen", "4-Ton-Grün")
+            new DesignInfo("gruen", "4-Ton-Grün"),
+            new DesignInfo("klassik", "Klassik"),
+            new DesignInfo("saeulen", "Säulen"),
+            new DesignInfo("phosphor", "Phosphor"),
+            new DesignInfo("ansi", "ANSI")
         };
 
         // Distance between content and the edge of the picture.
@@ -188,6 +192,10 @@ namespace SysopTV.Tray
 
         internal static Canvas Render(string style, ShopBigView v)
         {
+            if (ShowsAllPeriods(style))
+            {
+                return RenderAllPeriods(style, v);
+            }
             Texts t = Make(v);
             if (v.Period == "year" && v.Data.YearNote != null)
             {

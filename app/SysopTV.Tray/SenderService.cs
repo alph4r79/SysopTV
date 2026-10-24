@@ -892,7 +892,7 @@ namespace SysopTV.Tray
                     else
                     {
                         string id = st != null && st.ShownDesign != null ? st.ShownDesign : c.PictureAt(DateTime.Now);
-                        bool change = c.ShopBigView ? c.PeriodCycleSeconds > 0 : c.CycleSeconds > 0;
+                        bool change = c.ShopBigView ? c.PeriodCycleSeconds > 0 && !ShopBig.ShowsAllPeriods(id) : c.CycleSeconds > 0;
                         row.Design = c.PictureLabel(id) + (change ? ", Wechsel" : "");
                     }
                     if (st == null || st.LastResult == null)

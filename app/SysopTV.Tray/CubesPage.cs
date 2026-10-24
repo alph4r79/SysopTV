@@ -56,6 +56,7 @@ namespace SysopTV.Tray
         private readonly ComboBox bigStyle = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
         private readonly CheckBox claudeFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
         private readonly CheckBox bigFlip = new CheckBox { Text = "Klapp-Animation", AutoSize = true, Margin = new Padding(8, 5, 0, 0) };
+        private readonly Label styleNote = new Label { AutoSize = true, MaximumSize = new Size(200, 0), ForeColor = SystemColors.GrayText, Margin = new Padding(8, 0, 0, 0), Visible = false };
         private readonly Label viewCaption = Caption("Ansicht");
         private Control designRow, modeRow, cycleRow, periodRow, contentRow, styleRow;
 
@@ -126,7 +127,7 @@ namespace SysopTV.Tray
             AddRow(connGrid, "Zeitraum", periodRow);
             contentRow = content;
             AddRow(connGrid, "Inhalt", contentRow);
-            styleRow = Row(bigStyle, bigFlip);
+            styleRow = Row(bigStyle, bigFlip, styleNote);
             AddRow(connGrid, "Stil", styleRow);
             AddRow(connGrid, "API-Schlüssel (optional)", apiKey);
             AddRow(connGrid, "Admin-Passwort", adminPassword);
@@ -213,7 +214,7 @@ namespace SysopTV.Tray
             period.SelectedIndexChanged += (s, e) => Commit();
             periodCycle.SelectedIndexChanged += (s, e) => Commit();
             content.SelectedIndexChanged += (s, e) => Commit();
-            bigStyle.SelectedIndexChanged += (s, e) => { Commit(); ShowFlip(); };
+            bigStyle.SelectedIndexChanged += (s, e) => { Commit(); ShowFunctionRows(); };
             claudeFlip.CheckedChanged += (s, e) => { if (!filling) { bigFlip.Checked = claudeFlip.Checked; Commit(); } };
             bigFlip.CheckedChanged += (s, e) => { if (!filling) { claudeFlip.Checked = bigFlip.Checked; Commit(); } };
 
@@ -536,11 +537,19 @@ namespace SysopTV.Tray
             filling = wasFilling;
             string link;
             string hint = FunctionHint(info, selected, Ctx.Config, out link);
-            functionNote.Text = hint ?? "";
             int linkStart = link != null ? hint.IndexOf("Seite", StringComparison.Ordinal) : -1;
-            functionNote.LinkArea = linkStart >= 0 ? new LinkArea(linkStart, hint.Length - linkStart) : new LinkArea(0, 0);
+            int linkLength = linkStart >= 0 ? hint.Length - linkStart : 0;
+            // Styles with several periods: period and content do not count, they stay stored.
+            string style = Picked(bigStyle, selected.BigStyle);
+            bool allPeriods = big && ShopBig.ShowsAllPeriods(style);
+            styleNote.Text = allPeriods ? ShopBig.AllPeriodsHint(style) : "";
+            styleNote.Visible = allPeriods;
+            functionNote.Text = hint ?? "";
+            functionNote.LinkArea = linkStart >= 0 ? new LinkArea(linkStart, linkLength) : new LinkArea(0, 0);
             SuspendLayout();
             ShowRow(connGrid, functionNote, hint != null);
+            EnableRow(connGrid, periodRow, !allPeriods);
+            EnableRow(connGrid, contentRow, !allPeriods);
             shopView.Visible = viewCaption.Visible = !claude;
             ShowRow(connGrid, designRow, !big);
             ShowRow(connGrid, modeRow, claude);
@@ -550,6 +559,16 @@ namespace SysopTV.Tray
             ShowRow(connGrid, styleRow, big);
             ShowFlip();
             ResumeLayout();
+        }
+
+        private static void EnableRow(TableLayoutPanel grid, Control c, bool enabled)
+        {
+            c.Enabled = enabled;
+            Control caption = grid.GetControlFromPosition(0, grid.GetRow(c));
+            if (caption != null)
+            {
+                caption.Enabled = enabled;
+            }
         }
 
         // The flip animation only counts where Fallblatt can appear.

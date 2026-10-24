@@ -86,15 +86,15 @@ namespace SysopTV.Tray
         private static readonly ushort Black = 0;
 
         // Colours from config.h of the firmware.
-        private static readonly ushort SaeulenMain = Canvas.Rgb(70, 240, 0);
-        private static readonly ushort SaeulenDim = Canvas.Rgb(30, 120, 0);
-        private static readonly ushort SaeulenOutline = Canvas.Rgb(24, 96, 0);
-        private static readonly ushort SaeulenLine = Canvas.Rgb(0, 40, 0);
+        internal static readonly ushort SaeulenMain = Canvas.Rgb(70, 240, 0);
+        internal static readonly ushort SaeulenDim = Canvas.Rgb(30, 120, 0);
+        internal static readonly ushort SaeulenOutline = Canvas.Rgb(24, 96, 0);
+        internal static readonly ushort SaeulenLine = Canvas.Rgb(0, 40, 0);
         private static readonly ushort SaeulenWarn = Canvas.Rgb(255, 40, 16);
 
-        private static readonly ushort PhosphorMain = Canvas.Rgb(70, 240, 0);
-        private static readonly ushort PhosphorDim = Canvas.Rgb(30, 110, 0);
-        private static readonly ushort PhosphorShade = Canvas.Rgb(20, 80, 0);
+        internal static readonly ushort PhosphorMain = Canvas.Rgb(70, 240, 0);
+        internal static readonly ushort PhosphorDim = Canvas.Rgb(30, 110, 0);
+        internal static readonly ushort PhosphorShade = Canvas.Rgb(20, 80, 0);
         private static readonly ushort PhosphorScan = Canvas.Rgb(30, 130, 0);
         private static readonly ushort PhosphorWarn = Canvas.Rgb(255, 110, 0);
         private static readonly ushort PhosphorWarnScan = Canvas.Rgb(140, 50, 0);
@@ -107,15 +107,15 @@ namespace SysopTV.Tray
         private static readonly ushort DosEmpty = Canvas.Rgb(0, 0, 80);
         private static readonly ushort DosWarn = Canvas.Rgb(255, 70, 60);
 
-        private static readonly ushort AnsiMagenta = Canvas.Rgb(220, 40, 220);
-        private static readonly ushort AnsiCyan = Canvas.Rgb(40, 230, 240);
-        private static readonly ushort AnsiCyanDim = Canvas.Rgb(20, 110, 120);
-        private static readonly ushort AnsiYellow = Canvas.Rgb(255, 225, 30);
-        private static readonly ushort AnsiYellowDim = Canvas.Rgb(120, 100, 0);
+        internal static readonly ushort AnsiMagenta = Canvas.Rgb(220, 40, 220);
+        internal static readonly ushort AnsiCyan = Canvas.Rgb(40, 230, 240);
+        internal static readonly ushort AnsiCyanDim = Canvas.Rgb(20, 110, 120);
+        internal static readonly ushort AnsiYellow = Canvas.Rgb(255, 225, 30);
+        internal static readonly ushort AnsiYellowDim = Canvas.Rgb(120, 100, 0);
         private static readonly ushort AnsiRed = Canvas.Rgb(255, 60, 50);
         private static readonly ushort AnsiRedDim = Canvas.Rgb(120, 20, 10);
-        private static readonly ushort AnsiWhite = Canvas.Rgb(210, 210, 210);
-        private static readonly ushort AnsiGray = Canvas.Rgb(100, 100, 100);
+        internal static readonly ushort AnsiWhite = Canvas.Rgb(210, 210, 210);
+        internal static readonly ushort AnsiGray = Canvas.Rgb(100, 100, 100);
         private static readonly ushort AnsiDot = Canvas.Rgb(50, 50, 50);
 
         internal static readonly ushort AmberMain = Canvas.Rgb(255, 110, 0);

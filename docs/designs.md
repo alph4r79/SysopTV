@@ -48,7 +48,7 @@ All designs show "nicht aktiv" when no session is running, "ANMELDUNG ABGELAUFEN
 
 Setting: function **Shopify** or **WooCommerce**, **Ansicht** "Großanzeige", then **Zeitraum**, **Inhalt** and **Stil**.
 
-One period with one big number. Here today with orders and revenue in all seven styles, and the period "Dieses Jahr" (this year) in Fallblatt.
+Eleven styles. The first seven show one period with one big number: here today with orders and revenue, and the period "Dieses Jahr" (this year) in Fallblatt.
 
 <table>
   <tr>
@@ -65,11 +65,26 @@ One period with one big number. Here today with orders and revenue in all seven 
   </tr>
 </table>
 
+The four styles Klassik, Säulen, Phosphor and ANSI look like the Claude designs of the same name, without bars, and always show several periods together: Klassik today, this week and this month, the other three today and this week. They do not follow "Zeitraum" and "Inhalt"; while one of them is chosen, the program greys out these two settings and says "Dieser Stil zeigt Heute, Woche und Monat zusammen." (Klassik) or "Dieser Stil zeigt Heute und Woche zusammen." The settings stay stored and count again as soon as you choose another style.
+
+<table>
+  <tr>
+    <td align="center"><img src="images/screens/shop-gross-klassik.png" width="180" alt="Klassik"><br>Klassik</td>
+    <td align="center"><img src="images/screens/shop-gross-saeulen.png" width="180" alt="Säulen"><br>Säulen</td>
+    <td align="center"><img src="images/screens/shop-gross-phosphor.png" width="180" alt="Phosphor"><br>Phosphor</td>
+    <td align="center"><img src="images/screens/shop-gross-ansi.png" width="180" alt="ANSI"><br>ANSI</td>
+  </tr>
+</table>
+
 - **Zeitraum** (period): today, this week (since Monday 0:00), this month (since the 1st) or this year (since 1 January), in the time zone of the shop. The heading says HEUTE, DIESE WOCHE, the name of the month or the year.
 - **Inhalt** (content): only orders, only revenue, or both. With both, the count comes first, below it BESTELLUNGEN (orders), then the revenue.
-- **Stil** (style): Kassenbon (receipt), DOS, Bernstein, LED-Matrix, Hell, Fallblatt or 4-Ton-Grün.
+- **Stil** (style): Kassenbon (receipt), DOS, Bernstein, LED-Matrix, Hell, Fallblatt, 4-Ton-Grün, Klassik, Säulen, Phosphor or ANSI.
+- **Klassik** (classic): today's orders very big in amber, below them today's revenue, then one line each for the week and the month with orders and revenue, and the time the numbers were read ("Stand").
+- **Säulen** (columns): two green columns with a double frame for today and the week, each with the number of orders, the revenue and below it "seit 0:00" (since 0:00) or "seit Mo" (since Monday).
+- **Phosphor**: two dotted green columns for today and the week, the number of orders and the revenue in black fields.
+- **ANSI**: a logo line in magenta with the shop name, today in cyan and the week in yellow, each with the number of orders and the revenue.
 
-Amounts from 1000 on have no cents and a dot (3.022 €), below that a comma (184,50 €). A number that does not fit gets a smaller size, it is never cut, also six digit amounts like 123.456 €. If the year is missing (Shopify without `read_all_orders`, or a WooCommerce plugin older than 0.2.0), the year shows a notice instead.
+Amounts from 1000 on have no cents and a dot (3.022 €), below that a comma (184,50 €). A number that does not fit gets a smaller size, it is never cut, also four digit order counts and six digit amounts like 123.456 €. If the year is missing (Shopify without `read_all_orders`, or a WooCommerce plugin older than 0.2.0), the year shows a notice instead.
 
 ## Shop details
 

@@ -80,11 +80,11 @@ For **Shopify** and **WooCommerce** choose the **Ansicht** (view) next to the fu
 
 ![Page Würfel with Shopify and the big display](images/app/app-cubes-shopify.png)
 
-**Großanzeige** (big display) shows one period with one big number:
+**Großanzeige** (big display) shows one period with one big number, or several periods together in four of the styles:
 
 - **Zeitraum** (period): Heute (today), Diese Woche (this week, since Monday 0:00), Dieser Monat (this month, since the 1st) or Dieses Jahr (this year, since 1 January), in the time zone of the shop. Next to it the change of the period: "nicht wechseln" (no change), every 30 or every 60 seconds through all four.
 - **Inhalt** (content): "Bestellungen und Umsatz" (orders and revenue), "nur Bestellungen" (only orders) or "nur Umsatz" (only revenue).
-- **Stil** (style): Kassenbon, DOS, Bernstein, LED-Matrix, Hell, Fallblatt or 4-Ton-Grün, see [Designs](designs.md#shop-big-display).
+- **Stil** (style): Kassenbon, DOS, Bernstein, LED-Matrix, Hell, Fallblatt, 4-Ton-Grün, Klassik, Säulen, Phosphor or ANSI, see [Designs](designs.md#shop-big-display). Klassik, Säulen, Phosphor and ANSI always show several periods together (Klassik today, week and month, the others today and week). While one of them is chosen, "Zeitraum" and "Inhalt" are greyed out and a hint next to the style says so; the two settings stay stored.
 
 ![Page Würfel with WooCommerce and the details](images/app/app-cubes-woocommerce.png)
 

@@ -82,6 +82,15 @@ namespace SysopTV.Tray
             };
             foreach (DesignInfo style in ShopBig.Styles)
             {
+                if (ShopBig.ShowsAllPeriods(style.Id))
+                {
+                    // These show several periods at once: the sample and large numbers.
+                    var all = new ShopBigView { Data = ShopData.Sample(4), ShopName = "Mein Retro-Shop", Now = local };
+                    shop.Add(Write(ShopBig.Render(style.Id, all), folder, "shop-gross-" + style.Id));
+                    var large = new ShopBigView { Data = LargeNumbers(local), ShopName = "Mein Retro-Shop", Now = local };
+                    shop.Add(Write(ShopBig.Render(style.Id, large), folder, "shop-gross-" + style.Id + "-grosse-zahlen"));
+                    continue;
+                }
                 foreach (string[] v in variants)
                 {
                     var big = new ShopBigView
@@ -160,15 +169,15 @@ namespace SysopTV.Tray
 
             foreach (DesignInfo style in ShopBig.Styles)
             {
-                var big = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow, Period = "day", Content = "both" };
-                DocsPng(ShopBig.Render(style.Id, big), folder, "shop-gross-" + style.Id + "-heute");
+                var big = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "My Shop", Now = DocsNow, Period = "day", Content = "both" };
+                DocsPng(ShopBig.Render(style.Id, big), folder, "shop-gross-" + style.Id + (ShopBig.ShowsAllPeriods(style.Id) ? "" : "-heute"));
             }
-            var year = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow, Period = "year", Content = "both" };
+            var year = new ShopBigView { Data = ShopData.Sample(4, DocsNow), ShopName = "My Shop", Now = DocsNow, Period = "year", Content = "both" };
             DocsPng(ShopBig.Render("fallblatt", year), folder, "shop-gross-fallblatt-jahr");
             string[][] details = { new[] { "dos", "tabelle" }, new[] { "heute", "bestellliste" }, new[] { "bon", "kassenbon" }, new[] { "woche", "wochendiagramm" } };
             foreach (string[] d in details)
             {
-                var v = new ShopView { Data = ShopData.Sample(4, DocsNow), ShopName = "Mein Shop", Now = DocsNow };
+                var v = new ShopView { Data = ShopData.Sample(4, DocsNow), ShopName = "My Shop", Now = DocsNow };
                 DocsPng(ShopDesigns.Render(d[0], v), folder, "shop-" + d[1]);
             }
             return DocsApp(Path.Combine(imagesFolder, "app"));
@@ -397,6 +406,16 @@ namespace SysopTV.Tray
                     p += size;
                 }
             }
+        }
+
+        // Four digit counts and amounts above 10.000 euros, to check that nothing is cut.
+        internal static ShopData LargeNumbers(DateTime now)
+        {
+            ShopData d = ShopData.Sample(4, now);
+            d.Today = new ShopPeriod { Orders = 1234, Revenue = 12345.67m };
+            d.CalendarWeek = new ShopPeriod { Orders = 4321, Revenue = 98765.43m };
+            d.Month = new ShopPeriod { Orders = 9876, Revenue = 456789.01m };
+            return d;
         }
 
         // Session 27 % with reset in 2:16, week 85 % with reset next Thursday 22:59:30.
